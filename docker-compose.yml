@@ -66,8 +66,10 @@ services:
     networks:
       - finance_net
 
+  # Optional BI Dashboard profile (`docker compose --profile metabase up -d` or `--profile full`)
   metabase:
     image: metabase/metabase:latest
+    profiles: ["metabase", "full"]
     container_name: expenses-metabase
     restart: unless-stopped
     depends_on:
@@ -82,10 +84,10 @@ services:
     networks:
       - finance_net
 
-  # Optional document archiving & OCR profile (`docker compose --profile paperless up -d`)
+  # Optional document archiving & OCR profile (`docker compose --profile paperless up -d` or `--profile full`)
   paperless-redis:
     image: redis:7-alpine
-    profiles: ["paperless"]
+    profiles: ["paperless", "full"]
     container_name: paperless-redis
     restart: unless-stopped
     networks:
@@ -93,7 +95,7 @@ services:
 
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
-    profiles: ["paperless"]
+    profiles: ["paperless", "full"]
     container_name: expenses-paperless
     restart: unless-stopped
     depends_on:

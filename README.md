@@ -57,19 +57,27 @@ Editá `.env` con tus credenciales reales:
 - **`TELEGRAM_BOT_TOKEN`**: Token obtenido desde `@BotFather`.
 - **`EXPENSES_DB_PASSWORD`**: Contraseña segura para PostgreSQL.
 
-### 2. Levantar el Stack Base (Postgres + NestJS MCP + Hermes + Metabase)
+### 2. Levantar el Stack Base (Postgres + NestJS MCP + Hermes)
 
 ```bash
 docker compose up -d --build
 ```
 
-Si además querés levantar **Paperless-ngx** incluido para archivar comprobantes y hacer OCR de PDFs escaneados:
+Perfiles opcionales disponibles:
+- **Con tablero BI Metabase** (`http://localhost:3005`):
+  ```bash
+  docker compose --profile metabase up -d --build
+  ```
+- **Con Paperless-ngx** (`http://localhost:8010`, archivado + OCR de PDFs escaneados):
+  ```bash
+  docker compose --profile paperless up -d --build
+  ```
+- **Stack completo** (Base + Metabase + Paperless):
+  ```bash
+  docker compose --profile full up -d --build
+  ```
 
-```bash
-docker compose --profile paperless up -d --build
-```
-
-*(Luego de iniciar Paperless por primera vez en `http://localhost:8010`, generá un API Token en tu perfil y cargalo en `PAPERLESS_API_TOKEN` dentro de `.env`, seguido de `docker compose up -d expenses-api`).*
+*(Si levantás Paperless por primera vez, generá un API Token en tu perfil en `http://localhost:8010` y cargalo en `PAPERLESS_API_TOKEN` dentro de `.env`, seguido de `docker compose up -d expenses-api`).*
 
 ### 3. Emparejar tu usuario de Telegram (Primera vez)
 

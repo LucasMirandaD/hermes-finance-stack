@@ -20,10 +20,10 @@ Hermes Agent Oficial (nousresearch/hermes-agent -> gateway run)
                         NestJS 12 Backend (`./backend`)
                            ├── Clean Architecture + TypeORM + Zod
                            ├── PostgreSQL (`expenses`, `expense_installments`, `credit_cards`)
-                           └── Archivado asíncrono opcional en Paperless-ngx
+                           └── Archivado asíncrono opcional en Paperless-ngx (`--profile paperless`)
                                     │
                                     ▼
-                        Metabase (`http://localhost:3005`)
+                        Metabase BI opcional (`--profile metabase`, http://localhost:3005)
 ```
 
 ---
@@ -129,7 +129,7 @@ hermes-finance-stack/
 ├── hermes/                  # Configuración oficial de Hermes Agent (config.yaml, SOUL.md, skills/)
 ├── docs/
 │   └── metabase-queries.sql # Consultas SQL listas para el tablero financiero
-├── docker-compose.yml       # Orquestación unificada (profile opcional: paperless)
+├── docker-compose.yml       # Orquestación unificada (perfiles opcionales: metabase, paperless, full)
 ├── .env.example             # Plantilla de variables sin secretos
 └── README.md
 ```

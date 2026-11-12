@@ -1,0 +1,35 @@
+# Secrets & Environment
+.env
+.env.local
+.env.*.local
+
+# Backend Node/NestJS
+backend/node_modules/
+backend/dist/
+backend/coverage/
+backend/*.tsbuildinfo
+
+# Hermes Agent Runtime State (generated inside ./hermes/ on boot)
+hermes/.env
+hermes/state.db*
+hermes/logs/
+hermes/sessions/
+hermes/cache/
+hermes/image_cache/
+hermes/audio_cache/
+hermes/document_cache/
+hermes/memories/
+hermes/pairing/
+hermes/kanban/
+hermes/cron/
+hermes/hooks/
+hermes/browser_screenshots/
+hermes/auth.json
+hermes/profiles.json
+
+# OS & Editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

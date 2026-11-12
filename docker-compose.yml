@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: expenses-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${EXPENSES_DB_USER:-expenses_user}
+      POSTGRES_PASSWORD: ${EXPENSES_DB_PASSWORD:?EXPENSES_DB_PASSWORD is required}
+      POSTGRES_DB: ${EXPENSES_DB_NAME:-expenses_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXPENSES_DB_USER:-expenses_user} -d ${EXPENSES_DB_NAME:-expenses_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - finance_net
+
+  expenses-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hermes-expenses-api:latest
+    container_name: expenses-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${EXPENSES_DB_USER:-expenses_user}
+      DB_PASSWORD: ${EXPENSES_DB_PASSWORD:?EXPENSES_DB_PASSWORD is required}
+      DB_NAME: ${EXPENSES_DB_NAME:-expenses_db}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
+      DB_LOGGING: ${DB_LOGGING:-false}
+      PAPERLESS_BASE_URL: http://paperless:8000
+      PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN:-}
+    volumes:
+      - ./hermes:/opt/data:ro
+    networks:
+      - finance_net
+
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-agent
+    restart: unless-stopped
+    depends_on:
+      - expenses-api
+    command: ["gateway", "run"]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_UID: ${HERMES_UID:-1000}
+      HERMES_GID: ${HERMES_GID:-1000}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
+      TELEGRAM_HOME_CHANNEL: ${TELEGRAM_HOME_CHANNEL:-}
+    volumes:
+      - ./hermes:/opt/data
+    networks:
+      - finance_net
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: expenses-metabase
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${METABASE_PORT:-3005}:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    environment:
+      MB_DB_FILE: /metabase-data/metabase.db
+    networks:
+      - finance_net
+
+  # Optional document archiving & OCR profile (`docker compose --profile paperless up -d`)
+  paperless-redis:
+    image: redis:7-alpine
+    profiles: ["paperless"]
+    container_name: paperless-redis
+    restart: unless-stopped
+    networks:
+      - finance_net
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    profiles: ["paperless"]
+    container_name: expenses-paperless
+    restart: unless-stopped
+    depends_on:
+      - paperless-redis
+    ports:
+      - "${PAPERLESS_PORT:-8010}:8000"
+    environment:
+      PAPERLESS_REDIS: redis://paperless-redis:6379
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY:-change_me_paperless_secret_key}
+      PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost:8010}
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-spa+eng}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER:-admin}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD:-admin}
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+    networks:
+      - finance_net
+
+volumes:
+  postgres_data:
+  metabase_data:
+  paperless_data:
+  paperless_media:
+
+networks:
+  finance_net:
+    driver: bridge

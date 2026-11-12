@@ -1,0 +1,54 @@
+# Hermes Agent Official Configuration
+# Runtime: nousresearch/hermes-agent (gateway run)
+# Secrets (OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS) live in .env
+
+model:
+  provider: "openrouter"
+  default: "openrouter/free"
+  base_url: "https://openrouter.ai/api/v1"
+  streaming: false
+
+auxiliary:
+  vision:
+    provider: "openrouter"
+    model: "openrouter/free"
+
+agent:
+  max_turns: 25
+  gateway_notify_interval: 0
+
+display:
+  compact: true
+  tool_progress: "off"
+  cleanup_progress: true
+  long_running_notifications: false
+  platforms:
+    telegram:
+      tool_progress: "off"
+      cleanup_progress: true
+
+platforms:
+  telegram:
+    enabled: true
+    reply_to_mode: "first"
+    extra:
+      drop_pending_on_cold_boot: false
+      disable_link_previews: true
+      command_menu:
+        max_commands: 20
+        priority_mode: prepend
+        priority:
+          - facturas-ocr-gastos
+
+platform_toolsets:
+  cli: [hermes-cli]
+  telegram: [hermes-telegram]
+
+skills:
+  creation_nudge_interval: 0
+
+mcp_servers:
+  expenses:
+    url: "http://expenses-api:3000/api/mcp"
+    timeout: 60
+    connect_timeout: 15

@@ -2,6 +2,16 @@
 
 Notable changes to **Hermes Finance Stack** follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-11-23
+
+### Fixed
+- **Installment Amount vs. Purchase Total Disambiguation**: Added `installmentAmount` and `amountType` (`'TOTAL' | 'PER_INSTALLMENT'`) to `CreateExpenseDto`, `ExpensesService.registerExpense`, and the `register_expense` MCP tool so phrases like *"12 cuotas de 2000"* compute `totalAmount = 24000` (with 12 × `$2.000` installments) instead of dividing `2000 / 12`.
+- **Shared Installment Allocations**: `SHARED` allocation amounts are now computed against the resolved `totalAmount` when `installmentAmount` or `PER_INSTALLMENT` is supplied.
+- **Hermes Prompt Rules (`SOUL.md`)**: Added explicit rules to distinguish per-installment amounts vs. purchase totals, ask a single clarifying question if ambiguous, and display both total and per-installment amounts in confirmations.
+
+### Tests
+- Added 4 Vitest unit tests in `expenses.service.spec.ts` covering `installmentAmount`, `amountType: 'PER_INSTALLMENT'`, `amountType: 'TOTAL'`, and `SHARED` installment allocations (**42/42 tests passing** across 9 suites).
+
 ## [2.0.1] - 2026-11-23
 
 ### Changed

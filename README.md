@@ -5,10 +5,10 @@
 [![TypeORM](https://img.shields.io/badge/TypeORM-0.3-FE0803?style=flat-square)](https://typeorm.io/)
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![MCP Tools](https://img.shields.io/badge/MCP_Tools-43-10B981?style=flat-square)](https://modelcontextprotocol.io/)
-[![Tests](https://img.shields.io/badge/Vitest-38_passing-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Vitest-42_passing-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
 
 > **Idioma / Language:** English · [Español (README.es.md)](README.es.md)  
-> **Operations & Upgrades:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · **Changelog:** [CHANGELOG.md](CHANGELOG.md) · **Latest Release:** [v2.0.1](docs/releases/v2.0.1.md)
+> **Operations & Upgrades:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · **Changelog:** [CHANGELOG.md](CHANGELOG.md) · **Latest Release:** [v2.0.2](docs/releases/v2.0.2.md)
 
 **Self-hosted personal, household, and group finance platform operated entirely from Telegram.**  
 Built on **NousResearch Hermes Agent**, a Clean Architecture **NestJS 12 + TypeORM** API exposing **43 Streamable HTTP MCP tools**, **PostgreSQL 18**, native **800×480 PNG chart rendering** (`@resvg/resvg-wasm`), and optional **Metabase BI** and **Paperless-ngx OCR** profiles.
@@ -317,7 +317,7 @@ hermes-finance-stack/
 ```bash
 cd backend
 pnpm install
-pnpm test      # 38 Vitest unit tests across 9 suites
+pnpm test      # 42 Vitest unit tests across 9 suites
 pnpm build
 ```
 

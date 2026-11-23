@@ -266,6 +266,92 @@ describe('ExpensesService', () => {
       expect(result.isFailure).toBe(true);
       expect(result.getError()).toBeInstanceOf(InvalidOperation);
     });
+
+    it('should multiply installmentAmount by totalInstallments (e.g., 12 cuotas de 2000 = 24000)', async () => {
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-inst-1' }));
+
+      const result = await service.registerExpense({
+        merchantName: 'Tienda',
+        description: 'Compra en cuotas',
+        installmentAmount: 2000,
+        totalInstallments: 12,
+        expenseDate: '2026-11-23',
+        paymentMethod: 'CREDIT_CARD',
+      });
+
+      expect(result.isSuccess).toBe(true);
+      const saved = result.getValue();
+      expect(saved.totalAmount).toBe(24000);
+      expect(saved.isInstallment).toBe(true);
+      expect(saved.installmentsPlan).toHaveLength(12);
+      expect(saved.installmentsPlan[0].amount).toBe(2000);
+      expect(saved.installmentsPlan[11].amount).toBe(2000);
+    });
+
+    it('should interpret totalAmount as per-installment when amountType is PER_INSTALLMENT', async () => {
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-inst-2' }));
+
+      const result = await service.registerExpense({
+        merchantName: 'Tienda',
+        description: 'Compra 12 cuotas de 2000',
+        totalAmount: 2000,
+        amountType: 'PER_INSTALLMENT',
+        totalInstallments: 12,
+        expenseDate: '2026-11-23',
+        paymentMethod: 'CREDIT_CARD',
+      });
+
+      expect(result.isSuccess).toBe(true);
+      const saved = result.getValue();
+      expect(saved.totalAmount).toBe(24000);
+      expect(saved.installmentsPlan).toHaveLength(12);
+      expect(saved.installmentsPlan[0].amount).toBe(2000);
+    });
+
+    it('should divide totalAmount when amountType is TOTAL (e.g., 24000 en 12 cuotas = 2000/cuota)', async () => {
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-inst-3' }));
+
+      const result = await service.registerExpense({
+        merchantName: 'Tienda',
+        description: 'Compra 24000 en 12 cuotas',
+        totalAmount: 24000,
+        amountType: 'TOTAL',
+        totalInstallments: 12,
+        expenseDate: '2026-11-23',
+        paymentMethod: 'CREDIT_CARD',
+      });
+
+      expect(result.isSuccess).toBe(true);
+      const saved = result.getValue();
+      expect(saved.totalAmount).toBe(24000);
+      expect(saved.installmentsPlan).toHaveLength(12);
+      expect(saved.installmentsPlan[0].amount).toBe(2000);
+    });
+
+    it('should compute SHARED allocations on resolved totalAmount when installmentAmount is provided', async () => {
+      const m1 = { id: 'm1', slug: 'alice', displayName: 'Alice', aliases: [], isActive: true } as MemberEntity;
+      const m2 = { id: 'm2', slug: 'bob', displayName: 'Bob', aliases: [], isActive: true } as MemberEntity;
+
+      mockRepository.findMemberByRef!.mockResolvedValueOnce(m1);
+      mockRepository.findMembers!.mockResolvedValueOnce([m1, m2]);
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-inst-shared' }));
+
+      const result = await service.registerExpense({
+        merchantName: 'Electro',
+        description: 'Heladera',
+        installmentAmount: 50000,
+        totalInstallments: 6,
+        expenseDate: '2026-11-23',
+        scope: 'SHARED',
+        paidBy: 'alice',
+      });
+
+      expect(result.isSuccess).toBe(true);
+      const saved = result.getValue();
+      expect(saved.totalAmount).toBe(300000);
+      expect(saved.allocations[0].amount).toBe(150000);
+      expect(saved.allocations[1].amount).toBe(150000);
+    });
   });
 
   describe('getMonthlyInstallmentsSummary', () => {

@@ -34,6 +34,8 @@ export class ExpenseAllocationInputDto {
   percentage: number;
 }
 
+export type ExpenseAmountType = 'TOTAL' | 'PER_INSTALLMENT';
+
 export class CreateExpenseDto {
   @IsNotEmpty()
   @IsString()
@@ -43,10 +45,21 @@ export class CreateExpenseDto {
   @IsString()
   merchantName: string;
 
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Type(() => Number)
-  totalAmount: number;
+  totalAmount?: number;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Type(() => Number)
+  installmentAmount?: number;
+
+  @IsOptional()
+  @IsEnum(['TOTAL', 'PER_INSTALLMENT'])
+  amountType?: ExpenseAmountType = 'TOTAL';
 
   @IsOptional()
   @IsString()

@@ -10,6 +10,7 @@ import {
 import {
   CreateExpenseDto,
   ExpenseAllocationInputDto,
+  ExpenseAmountType,
 } from '../../presentation/dtos/create-expense.dto';
 import { CreateCreditCardDto } from '../../presentation/dtos/create-credit-card.dto';
 import { ExpenseEntity } from '../../data/entities/expense.entity';
@@ -316,6 +317,28 @@ export class ExpensesService implements IExpensesService {
     return Result.ok(entities);
   }
 
+  private resolveExpenseTotalAmount(
+    totalAmount?: number,
+    installmentAmount?: number,
+    amountType?: ExpenseAmountType,
+    totalInstallments = 1,
+  ): number {
+    const installments = Math.max(1, totalInstallments);
+    const hasInstallmentAmt = typeof installmentAmount === 'number' && installmentAmount > 0;
+    const hasTotalAmt = typeof totalAmount === 'number' && totalAmount > 0;
+
+    if (hasInstallmentAmt) {
+      return round2(installmentAmount * installments);
+    }
+    if (hasTotalAmt) {
+      if (amountType === 'PER_INSTALLMENT' && installments > 1) {
+        return round2(totalAmount * installments);
+      }
+      return round2(totalAmount);
+    }
+    return 0;
+  }
+
   async registerExpense(dto: CreateExpenseDto): Promise<Result<ExpenseEntity>> {
     try {
       let matchedCard: CreditCardEntity | null = null;
@@ -343,11 +366,28 @@ export class ExpensesService implements IExpensesService {
         }
       }
 
+      const totalInstallments =
+        dto.totalInstallments && dto.totalInstallments > 1 ? dto.totalInstallments : 1;
+      const isInstallment = dto.isInstallment || totalInstallments > 1;
+      const intervalMonths = dto.intervalMonths && dto.intervalMonths > 0 ? dto.intervalMonths : 1;
+
+      const resolvedTotalAmount = this.resolveExpenseTotalAmount(
+        dto.totalAmount,
+        dto.installmentAmount,
+        dto.amountType,
+        totalInstallments,
+      );
+      if (resolvedTotalAmount <= 0) {
+        return Result.fail(
+          new InvalidOperation('Debes indicar totalAmount o installmentAmount mayor a 0.'),
+        );
+      }
+
       const scope: ExpenseScope =
         dto.scope || (dto.allocations && dto.allocations.length > 1 ? 'SHARED' : 'PERSONAL');
 
       const allocationsRes = await this.resolveAllocationsEntities(
-        dto.totalAmount,
+        resolvedTotalAmount,
         scope,
         dto.allocations,
       );
@@ -355,17 +395,12 @@ export class ExpensesService implements IExpensesService {
         return Result.fail(allocationsRes.getError());
       }
 
-      const totalInstallments =
-        dto.totalInstallments && dto.totalInstallments > 1 ? dto.totalInstallments : 1;
-      const isInstallment = dto.isInstallment || totalInstallments > 1;
-      const intervalMonths = dto.intervalMonths && dto.intervalMonths > 0 ? dto.intervalMonths : 1;
-
       const installmentsPlan: ExpenseInstallmentEntity[] = [];
       if (isInstallment) {
         const firstDueDate =
           dto.firstDueDate || this.calculateFirstDueDate(dto.expenseDate, matchedCard?.dueDay);
         const generated = InstallmentPlanGenerator.generate(
-          dto.totalAmount,
+          resolvedTotalAmount,
           totalInstallments,
           firstDueDate,
           intervalMonths,
@@ -385,7 +420,7 @@ export class ExpensesService implements IExpensesService {
       const expense = new ExpenseEntity();
       expense.description = dto.description;
       expense.merchantName = dto.merchantName;
-      expense.totalAmount = dto.totalAmount;
+      expense.totalAmount = resolvedTotalAmount;
       expense.currency = (dto.currency || 'ARS').toUpperCase();
       expense.expenseDate = dto.expenseDate;
       expense.paymentMethod = dto.paymentMethod || (matchedCard ? 'CREDIT_CARD' : 'CASH');

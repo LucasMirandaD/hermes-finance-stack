@@ -41,7 +41,23 @@ export function registerCoreExpenseTools(
       description: z.string().describe('Concepto o detalle del gasto'),
       totalAmount: z
         .union([z.number(), z.string()])
-        .describe('Monto total (ej: 889000, "889 mil", "1.5m")'),
+        .optional()
+        .describe(
+          'Monto TOTAL de la compra (ej: 24000 para "24000 en 12 cuotas", "889 mil", "1.5m"). Si el usuario indicó el valor de CADA cuota ("12 cuotas de 2000"), usá installmentAmount o marcá amountType="PER_INSTALLMENT".',
+        ),
+      installmentAmount: z
+        .union([z.number(), z.string()])
+        .optional()
+        .describe(
+          'Valor de CADA cuota individual (ej: 2000 para "12 cuotas de 2000", "185k" para "6 cuotas de 185k"). El backend calcula automáticamente totalAmount = installmentAmount × totalInstallments.',
+        ),
+      amountType: z
+        .enum(['TOTAL', 'PER_INSTALLMENT'])
+        .optional()
+        .default('TOTAL')
+        .describe(
+          'Indica si totalAmount corresponde al TOTAL de la compra ("TOTAL", ej: "24000 en 12 cuotas") o al valor de CADA CUOTA ("PER_INSTALLMENT", ej: "12 cuotas de 2000").',
+        ),
       expenseDate: z.string().describe('Fecha YYYY-MM-DD (por defecto hoy)'),
       currency: z.string().optional().default('ARS'),
       paymentMethod: z
@@ -92,9 +108,18 @@ export function registerCoreExpenseTools(
         .describe('Ruta local de la imagen o PDF recibido por Telegram para archivar en Paperless si está habilitado'),
     },
     async (args) => {
-      const parsedAmount = parseArgentineAmount(args.totalAmount);
-      if (parsedAmount <= 0) {
-        return errResult('El monto debe ser mayor a 0.');
+      const parsedTotalAmount =
+        args.totalAmount !== undefined ? parseArgentineAmount(args.totalAmount) : undefined;
+      const parsedInstallmentAmount =
+        args.installmentAmount !== undefined
+          ? parseArgentineAmount(args.installmentAmount)
+          : undefined;
+
+      if (
+        (parsedTotalAmount === undefined || parsedTotalAmount <= 0) &&
+        (parsedInstallmentAmount === undefined || parsedInstallmentAmount <= 0)
+      ) {
+        return errResult('Debes indicar totalAmount o installmentAmount mayor a 0.');
       }
 
       const totalInstallments = Math.max(1, args.totalInstallments ?? 1);
@@ -104,7 +129,12 @@ export function registerCoreExpenseTools(
       const result = await expensesService.registerExpense({
         merchantName: args.merchantName,
         description: args.description,
-        totalAmount: parsedAmount,
+        totalAmount: parsedTotalAmount && parsedTotalAmount > 0 ? parsedTotalAmount : undefined,
+        installmentAmount:
+          parsedInstallmentAmount && parsedInstallmentAmount > 0
+            ? parsedInstallmentAmount
+            : undefined,
+        amountType: args.amountType || 'TOTAL',
         expenseDate: args.expenseDate,
         currency: args.currency || 'ARS',
         paymentMethod: args.paymentMethod || 'CREDIT_CARD',

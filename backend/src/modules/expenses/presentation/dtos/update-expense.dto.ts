@@ -1,13 +1,17 @@
 import {
+  IsArray,
+  IsBoolean,
   IsEnum,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   Matches,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentMethod } from '../../domain/interfaces/expense.interface';
+import { ExpenseScope, PaymentMethod } from '../../domain/interfaces/expense.interface';
+import { ExpenseAllocationInputDto } from './create-expense.dto';
 
 export class UpdateExpenseDto {
   @IsOptional()
@@ -35,6 +39,24 @@ export class UpdateExpenseDto {
   @IsOptional()
   @IsString()
   bankName?: string;
+
+  @IsOptional()
+  @IsEnum(['PERSONAL', 'SHARED'])
+  scope?: ExpenseScope;
+
+  @IsOptional()
+  @IsBoolean()
+  isFixed?: boolean;
+
+  @IsOptional()
+  @IsString()
+  paidBy?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpenseAllocationInputDto)
+  allocations?: ExpenseAllocationInputDto[];
 }
 
 export class UpdateInstallmentDto {

@@ -2,39 +2,50 @@
 
 Backend desarrollado con **Clean Architecture & DDD** sobre **NestJS 12**, **Node 26 LTS**, **TypeORM** y **PostgreSQL**, que expone:
 1. **API REST** (`/api/expenses/*`, `/api/health`)
-2. **Servidor MCP Streamable HTTP** (`/api/mcp`) para **Hermes Agent**, con 13 herramientas tipadas mediante **Zod** (`@modelcontextprotocol/sdk`).
-3. **Archivado asíncrono y OCR fallback** en **Paperless-ngx** (`PaperlessService`).
+2. **Servidor MCP Streamable HTTP** (`/api/mcp`) para **Hermes Agent**, con **35 herramientas** tipadas mediante **Zod** (`@modelcontextprotocol/sdk`).
+3. **Generación de Gráficos PNG** (`@resvg/resvg-wasm` + `font-dejavu`) y **Exportación CSV/JSON** en `/opt/data/{charts,exports}`.
+4. **Archivado asíncrono y OCR fallback** en **Paperless-ngx** (`PaperlessService`).
 
 ---
 
-## 🛠️ Herramientas MCP Disponibles (`/api/mcp`)
+## 🗄️ Modelo de Datos (7 Tablas PostgreSQL)
 
-- `register_expense`: Alta de gasto único, transferencia o plan en cuotas (con normalización de montos en español como `"889 mil"`, `"1.5m"`, `"45k"` y archivado asíncrono de `filePath` en Paperless).
-- `get_financial_summary`: Cashflow desembolsado, cuotas pendientes, desglose por rubro/banco y comparativa con período anterior.
-- `search_expenses`: Búsqueda por comercio, concepto, categoría o rango de fechas (incluye resolución de alias).
-- `list_recent_expenses`: Últimos movimientos cargados.
-- `get_upcoming_installments` / `search_pending_installments`: Consulta de vencimientos próximos o pendientes.
-- `pay_installment`: Marca una cuota pendiente como pagada con banco y medio de pago.
-- `update_expense` / `update_installment`: Modifica montos de deudas o cuotas puntuales recalculando saldos automáticamente.
-- `delete_expense` / `delete_installment`: Elimina deudas o cuotas con recálculo o cascada.
-- `list_credit_cards`: Catálogo de tarjetas y extensiones.
-- `extract_scanned_pdf_ocr`: Fallback OCR en Paperless solo cuando un PDF es un escaneo sin texto legible.
+- `expenses`: gastos, alcance (`PERSONAL` / `SHARED`), flag `is_fixed`, `paid_by_member_id`, `recurring_expense_id`, cuotas y `paperless_document_id`.
+- `expense_installments`: plan de cuotas con estados `PENDING`, `PAID`, `CANCELLED`.
+- `credit_cards`: tarjetas titulares y extensiones familiares (`closing_day`, `due_day`, `holder_name`).
+- `members`: miembros del hogar (`slug`, `display_name`, `telegram_username`, `telegram_id`, `aliases`).
+- `expense_allocations`: reparto porcentual y en monto por miembro para gastos compartidos.
+- `category_budgets`: presupuestos mensuales por categoría, moneda, alcance y umbral de alerta.
+- `recurring_expenses`: plantillas de gastos fijos (`MONTHLY`, `BIMONTHLY`, `YEARLY`) con día de vencimiento y monto estimado.
+
+Migración SQL idempotente para entornos con `DB_SYNCHRONIZE=false`: [`sql/001_multiuser_budgets_fixed_expenses.sql`](./sql/001_multiuser_budgets_fixed_expenses.sql).
+
+---
+
+## 🛠️ Herramientas MCP Disponibles (`/api/mcp` — 35 Tools)
+
+- **Salud**: `health_check`
+- **Gastos**: `register_expense`, `search_expenses`, `list_recent_expenses`, `update_expense`, `delete_expense`, `extract_scanned_pdf_ocr`
+- **Cuotas y Tarjetas**: `get_upcoming_installments`, `get_monthly_installments_summary`, `search_pending_installments`, `pay_installment`, `update_installment`, `delete_installment`, `list_credit_cards`, `register_credit_card`
+- **Miembros y Compartidos**: `create_member`, `update_member`, `list_members`, `delete_member`, `get_shared_balance`
+- **Presupuestos**: `set_category_budget`, `list_category_budgets`, `delete_category_budget`, `get_budget_status`
+- **Gastos Fijos / Recurrentes**: `create_recurring_expense`, `list_recurring_expenses`, `update_recurring_expense`, `delete_recurring_expense`, `get_fixed_expenses_status`, `pay_recurring_expense`
+- **Analítica, Gráficos y Export**: `get_financial_summary`, `compare_months`, `top_expenses`, `export_expenses`, `render_chart`
 
 ---
 
 ## 🔌 Endpoints REST Principales (`/api`)
 
 - `GET /api/health` — Estado del servicio
-- `POST /api/expenses` — Registrar gasto / cuotas
-- `GET /api/expenses` — Listar gastos recientes
-- `GET /api/expenses/summary` — Resumen ejecutivo por `month` o `startDate`/`endDate`
+- `POST /api/expenses` | `GET /api/expenses` — Alta y listado de gastos
+- `GET /api/expenses/summary` — Resumen ejecutivo (`month`, `startDate`, `endDate`, `scope`, `memberRef`, `isFixed`)
 - `GET /api/expenses/search` — Búsqueda por `q`, `category`, fechas
-- `GET /api/expenses/installments/upcoming` — Próximos vencimientos (`?days=30`)
-- `GET /api/expenses/installments/pending` — Cuotas pendientes
-- `POST /api/expenses/installments/:id/pay` — Pagar cuota
-- `PATCH /api/expenses/:id` | `DELETE /api/expenses/:id` — Editar / borrar gasto o deuda
-- `PATCH /api/expenses/installments/:id` | `DELETE /api/expenses/installments/:id` — Editar / borrar cuota
-- `GET /api/expenses/cards` | `POST /api/expenses/cards` — Tarjetas registradas
+- `GET /api/expenses/compare` | `GET /api/expenses/top` | `GET /api/expenses/export` | `GET /api/expenses/charts/render`
+- `GET / POST /api/expenses/members` | `PATCH / DELETE /api/expenses/members/:ref` | `GET /api/expenses/shared/balance`
+- `GET / POST /api/expenses/budgets` | `GET /api/expenses/budgets/status` | `DELETE /api/expenses/budgets/:id`
+- `GET / POST /api/expenses/recurring` | `GET /api/expenses/recurring/status` | `POST /api/expenses/recurring/:ref/pay` | `PATCH / DELETE /api/expenses/recurring/:id`
+- `GET /api/expenses/installments/{upcoming,summary,pending}` | `POST /api/expenses/installments/:id/pay` | `PATCH / DELETE /api/expenses/installments/:id`
+- `GET / POST /api/expenses/cards` — Tarjetas registradas
 - `POST /api/mcp` — Endpoint Streamable HTTP de MCP
 
 ---
@@ -43,6 +54,6 @@ Backend desarrollado con **Clean Architecture & DDD** sobre **NestJS 12**, **Nod
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm test     # Vitest (19 tests unitarios)
+pnpm test     # Vitest (29 tests unitarios en 6 archivos)
 pnpm build    # Compilación NestJS / TypeScript
 ```

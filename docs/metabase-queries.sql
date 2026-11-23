@@ -187,3 +187,113 @@ SELECT
 FROM expenses e
 WHERE e.paperless_document_id IS NOT NULL
 ORDER BY e.expense_date DESC;
+
+-- 11. Gastos Fijos vs Variables (Mes Actual - Cashflow Pagado)
+WITH classified_paid AS (
+  SELECT
+    CASE WHEN is_fixed THEN 'Gastos Fijos' ELSE 'Gastos Variables' END AS tipo,
+    total_amount AS monto
+  FROM expenses
+  WHERE is_installment = FALSE
+    AND date_trunc('month', expense_date) = date_trunc('month', CURRENT_DATE)
+  UNION ALL
+  SELECT
+    CASE WHEN e.is_fixed THEN 'Gastos Fijos' ELSE 'Gastos Variables' END AS tipo,
+    i.amount AS monto
+  FROM expense_installments i
+  JOIN expenses e ON i.expense_id = e.id
+  WHERE i.status = 'PAID'
+    AND (
+      (i.paid_at IS NOT NULL AND date_trunc('month', i.paid_at) = date_trunc('month', CURRENT_DATE))
+      OR (i.paid_at IS NULL AND date_trunc('month', i.due_date) = date_trunc('month', CURRENT_DATE))
+    )
+)
+SELECT
+  tipo AS "Tipo de Gasto",
+  COALESCE(SUM(monto), 0) AS "Total"
+FROM classified_paid
+GROUP BY 1
+ORDER BY 2 DESC;
+
+-- 12. Balance de Gastos Compartidos por Miembro (Histórico)
+WITH paid_by_member AS (
+  SELECT paid_by_member_id AS member_id, SUM(total_amount) AS paid
+  FROM expenses
+  WHERE scope = 'SHARED' AND paid_by_member_id IS NOT NULL
+  GROUP BY paid_by_member_id
+),
+attributed_to_member AS (
+  SELECT a.member_id, SUM(a.amount) AS attributed
+  FROM expense_allocations a
+  JOIN expenses e ON a.expense_id = e.id
+  WHERE e.scope = 'SHARED'
+  GROUP BY a.member_id
+)
+SELECT
+  m.display_name AS "Miembro",
+  COALESCE(p.paid, 0) AS "Pagó",
+  COALESCE(at.attributed, 0) AS "Le Correspondía",
+  COALESCE(p.paid, 0) - COALESCE(at.attributed, 0) AS "Saldo Neto"
+FROM members m
+LEFT JOIN paid_by_member p ON m.id = p.member_id
+LEFT JOIN attributed_to_member at ON m.id = at.member_id
+WHERE m.is_active = TRUE
+ORDER BY "Saldo Neto" DESC;
+
+-- 13. Estado de Presupuestos por Categoría (Mes Actual)
+WITH monthly_cat_spend AS (
+  SELECT category, currency, SUM(total_amount) AS spent
+  FROM expenses
+  WHERE is_installment = FALSE
+    AND date_trunc('month', expense_date) = date_trunc('month', CURRENT_DATE)
+  GROUP BY category, currency
+  UNION ALL
+  SELECT e.category, e.currency, SUM(i.amount) AS spent
+  FROM expense_installments i
+  JOIN expenses e ON i.expense_id = e.id
+  WHERE i.status = 'PAID'
+    AND (
+      (i.paid_at IS NOT NULL AND date_trunc('month', i.paid_at) = date_trunc('month', CURRENT_DATE))
+      OR (i.paid_at IS NULL AND date_trunc('month', i.due_date) = date_trunc('month', CURRENT_DATE))
+    )
+  GROUP BY e.category, e.currency
+),
+agg_spend AS (
+  SELECT UPPER(category) AS category, UPPER(currency) AS currency, SUM(spent) AS spent
+  FROM monthly_cat_spend
+  GROUP BY 1, 2
+)
+SELECT
+  b.category AS "Categoría",
+  b.currency AS "Moneda",
+  b.monthly_amount AS "Presupuesto",
+  COALESCE(s.spent, 0) AS "Gastado",
+  b.monthly_amount - COALESCE(s.spent, 0) AS "Restante",
+  ROUND((COALESCE(s.spent, 0) / NULLIF(b.monthly_amount, 0)) * 100, 1) AS "% Usado"
+FROM category_budgets b
+LEFT JOIN agg_spend s
+  ON UPPER(b.category) = s.category AND UPPER(b.currency) = s.currency
+WHERE b.is_active = TRUE
+ORDER BY "% Usado" DESC NULLS LAST;
+
+-- 14. Gastos Fijos Pendientes del Mes Actual
+SELECT
+  r.merchant_name AS "Servicio / Comercio",
+  r.description AS "Descripción",
+  r.estimated_amount AS "Monto Estimado",
+  r.currency AS "Moneda",
+  r.day_of_month AS "Día Vencimiento",
+  r.scope AS "Alcance",
+  r.payment_method AS "Medio Esperado"
+FROM recurring_expenses r
+WHERE r.is_active = TRUE
+  AND NOT EXISTS (
+    SELECT 1
+    FROM expenses e
+    WHERE date_trunc('month', e.expense_date) = date_trunc('month', CURRENT_DATE)
+      AND (
+        e.recurring_expense_id = r.id
+        OR (e.is_fixed = TRUE AND LOWER(TRIM(e.merchant_name)) = LOWER(TRIM(r.merchant_name)))
+      )
+  )
+ORDER BY r.day_of_month ASC;

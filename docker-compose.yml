@@ -41,8 +41,12 @@ services:
       DB_LOGGING: ${DB_LOGGING:-false}
       PAPERLESS_BASE_URL: http://paperless:8000
       PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN:-}
+      CHARTS_DIR: /opt/data/charts
+      EXPORTS_DIR: /opt/data/exports
     volumes:
       - ./hermes:/opt/data:ro
+      - ./hermes/charts:/opt/data/charts:rw
+      - ./hermes/exports:/opt/data/exports:rw
     networks:
       - finance_net
 

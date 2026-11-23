@@ -1,21 +1,58 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
-import { IExpensesRepository } from './i-expenses.repository';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { Between, DataSource, IsNull, Repository } from 'typeorm';
+import { DatabaseHealthStats, IExpensesRepository } from './i-expenses.repository';
 import { ExpenseEntity } from '../entities/expense.entity';
 import { CreditCardEntity } from '../entities/credit-card.entity';
 import { ExpenseInstallmentEntity } from '../entities/expense-installment.entity';
+import { MemberEntity } from '../entities/member.entity';
+import { ExpenseAllocationEntity } from '../entities/expense-allocation.entity';
+import { CategoryBudgetEntity } from '../entities/category-budget.entity';
+import { RecurringExpenseEntity } from '../entities/recurring-expense.entity';
+import { BudgetScope } from '../../domain/interfaces/category-budget.interface';
 
 @Injectable()
 export class ExpensesRepository implements IExpensesRepository {
   constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @InjectRepository(ExpenseEntity)
     private readonly expenseRepo: Repository<ExpenseEntity>,
     @InjectRepository(CreditCardEntity)
     private readonly cardRepo: Repository<CreditCardEntity>,
     @InjectRepository(ExpenseInstallmentEntity)
     private readonly installmentRepo: Repository<ExpenseInstallmentEntity>,
+    @InjectRepository(MemberEntity)
+    private readonly memberRepo: Repository<MemberEntity>,
+    @InjectRepository(ExpenseAllocationEntity)
+    private readonly allocationRepo: Repository<ExpenseAllocationEntity>,
+    @InjectRepository(CategoryBudgetEntity)
+    private readonly budgetRepo: Repository<CategoryBudgetEntity>,
+    @InjectRepository(RecurringExpenseEntity)
+    private readonly recurringRepo: Repository<RecurringExpenseEntity>,
   ) {}
+
+  async checkDatabaseHealth(): Promise<DatabaseHealthStats> {
+    await this.dataSource.query('SELECT 1');
+    const [expenses, creditCards, members, recurringExpenses, budgets] = await Promise.all([
+      this.expenseRepo.count(),
+      this.cardRepo.count({ where: { isActive: true } }),
+      this.memberRepo.count({ where: { isActive: true } }),
+      this.recurringRepo.count({ where: { isActive: true } }),
+      this.budgetRepo.count({ where: { isActive: true } }),
+    ]);
+
+    return {
+      connected: true,
+      counts: {
+        expenses,
+        creditCards,
+        members,
+        recurringExpenses,
+        budgets,
+      },
+    };
+  }
 
   async saveExpense(expense: Partial<ExpenseEntity>): Promise<ExpenseEntity> {
     return this.expenseRepo.save(expense);
@@ -24,7 +61,12 @@ export class ExpensesRepository implements IExpensesRepository {
   async findExpenseById(id: string): Promise<ExpenseEntity | null> {
     return this.expenseRepo.findOne({
       where: { id },
-      relations: { creditCard: true, installmentsPlan: true },
+      relations: {
+        creditCard: true,
+        installmentsPlan: true,
+        paidByMember: true,
+        allocations: { member: true },
+      },
     });
   }
 
@@ -33,7 +75,12 @@ export class ExpensesRepository implements IExpensesRepository {
       order: { expenseDate: 'DESC', createdAt: 'DESC' },
       take: limit,
       skip: offset,
-      relations: { creditCard: true, installmentsPlan: true },
+      relations: {
+        creditCard: true,
+        installmentsPlan: true,
+        paidByMember: true,
+        allocations: { member: true },
+      },
     });
   }
 
@@ -46,7 +93,13 @@ export class ExpensesRepository implements IExpensesRepository {
         dueDate: Between(startDate, endDate),
       },
       order: { dueDate: 'ASC' },
-      relations: { expense: { creditCard: true } },
+      relations: {
+        expense: {
+          creditCard: true,
+          paidByMember: true,
+          allocations: { member: true },
+        },
+      },
     });
   }
 
@@ -55,6 +108,9 @@ export class ExpensesRepository implements IExpensesRepository {
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
       .where('inst.status = :status', { status: 'PENDING' });
 
     if (creditCardId) {
@@ -67,7 +123,13 @@ export class ExpensesRepository implements IExpensesRepository {
   async findInstallmentById(id: string): Promise<ExpenseInstallmentEntity | null> {
     return this.installmentRepo.findOne({
       where: { id },
-      relations: { expense: { creditCard: true } },
+      relations: {
+        expense: {
+          creditCard: true,
+          paidByMember: true,
+          allocations: { member: true },
+        },
+      },
     });
   }
 
@@ -84,17 +146,21 @@ export class ExpensesRepository implements IExpensesRepository {
     return cleanTerm ? ALIASES[cleanTerm] || cleanTerm : undefined;
   }
 
-  async searchPendingInstallments(searchTerm?: string, dueDate?: string): Promise<ExpenseInstallmentEntity[]> {
+  async searchPendingInstallments(
+    searchTerm?: string,
+    dueDate?: string,
+  ): Promise<ExpenseInstallmentEntity[]> {
     const query = this.installmentRepo
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
       .where('inst.status = :status', { status: 'PENDING' });
 
     const resolvedTerm = this.resolveSearchAlias(searchTerm);
     if (resolvedTerm) {
       query.andWhere(
-        '(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, \'\')) LIKE :term)',
+        "(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, '')) LIKE :term)",
         { term: `%${resolvedTerm}%` },
       );
     }
@@ -148,6 +214,9 @@ export class ExpensesRepository implements IExpensesRepository {
     const query = this.expenseRepo
       .createQueryBuilder('exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
       .where('exp.expenseDate BETWEEN :startDate AND :endDate', { startDate, endDate });
 
     if (isInstallment !== undefined) {
@@ -165,6 +234,9 @@ export class ExpensesRepository implements IExpensesRepository {
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
       .where('inst.status = :status', { status: 'PAID' })
       .andWhere(
         '((inst.paidAt IS NOT NULL AND DATE(inst.paidAt) BETWEEN :startDate AND :endDate) OR (inst.paidAt IS NULL AND inst.dueDate BETWEEN :startDate AND :endDate))',
@@ -182,6 +254,9 @@ export class ExpensesRepository implements IExpensesRepository {
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
       .where('inst.status = :status', { status: 'PENDING' })
       .andWhere('inst.dueDate BETWEEN :startDate AND :endDate', { startDate, endDate })
       .orderBy('inst.dueDate', 'ASC')
@@ -193,6 +268,7 @@ export class ExpensesRepository implements IExpensesRepository {
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
       .where('inst.status = :status', { status: 'PENDING' })
       .andWhere(`inst.dueDate <= CURRENT_DATE + (:days * INTERVAL '1 day')`, { days })
       .orderBy('inst.dueDate', 'ASC')
@@ -210,11 +286,14 @@ export class ExpensesRepository implements IExpensesRepository {
     const expQuery = this.expenseRepo
       .createQueryBuilder('exp')
       .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
       .where('exp.isInstallment = false');
 
     if (resolvedTerm) {
       expQuery.andWhere(
-        '(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, \'\')) LIKE :term)',
+        "(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, '')) LIKE :term)",
         { term: `%${resolvedTerm}%` },
       );
     }
@@ -229,11 +308,14 @@ export class ExpensesRepository implements IExpensesRepository {
     const instQuery = this.installmentRepo
       .createQueryBuilder('inst')
       .innerJoinAndSelect('inst.expense', 'exp')
-      .leftJoinAndSelect('exp.creditCard', 'card');
+      .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember');
 
     if (resolvedTerm) {
       instQuery.andWhere(
-        '(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, \'\')) LIKE :term OR LOWER(COALESCE(inst.notes, \'\')) LIKE :term)',
+        "(LOWER(exp.merchantName) LIKE :term OR LOWER(exp.description) LIKE :term OR LOWER(COALESCE(exp.rawSourceText, '')) LIKE :term OR LOWER(COALESCE(inst.notes, '')) LIKE :term)",
         { term: `%${resolvedTerm}%` },
       );
     }
@@ -260,5 +342,195 @@ export class ExpensesRepository implements IExpensesRepository {
 
   async updateExpensePaperlessId(id: string, paperlessDocumentId: number): Promise<void> {
     await this.expenseRepo.update(id, { paperlessDocumentId });
+  }
+
+  // --- Members & Shared Allocations ---
+
+  async saveMember(member: Partial<MemberEntity>): Promise<MemberEntity> {
+    return this.memberRepo.save(member);
+  }
+
+  async findMembers(activeOnly = true): Promise<MemberEntity[]> {
+    return this.memberRepo.find({
+      where: activeOnly ? { isActive: true } : {},
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async findMemberByRef(ref: string): Promise<MemberEntity | null> {
+    const clean = ref?.trim();
+    if (!clean) return null;
+
+    const cleanLower = clean.toLowerCase();
+    const cleanHandle = cleanLower.replace(/^@/, '');
+    const members = await this.memberRepo.find({ order: { createdAt: 'ASC' } });
+
+    return (
+      members.find((m) => m.id === clean) ||
+      members.find((m) => m.slug.toLowerCase() === cleanLower) ||
+      members.find((m) => m.telegramId && m.telegramId === clean) ||
+      members.find(
+        (m) => m.telegramUsername && m.telegramUsername.toLowerCase().replace(/^@/, '') === cleanHandle,
+      ) ||
+      members.find((m) => m.displayName.toLowerCase() === cleanLower) ||
+      members.find((m) =>
+        (m.aliases || []).some((alias) => String(alias).trim().toLowerCase() === cleanLower),
+      ) ||
+      null
+    );
+  }
+
+  async deleteMember(id: string): Promise<boolean> {
+    const result = await this.memberRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  async countMemberReferences(memberId: string): Promise<number> {
+    const [paidCount, allocCount] = await Promise.all([
+      this.expenseRepo.count({ where: { paidByMemberId: memberId } }),
+      this.allocationRepo.count({ where: { memberId } }),
+    ]);
+    return paidCount + allocCount;
+  }
+
+  async replaceExpenseAllocations(
+    expenseId: string,
+    allocations: Array<Partial<ExpenseAllocationEntity>>,
+  ): Promise<void> {
+    await this.allocationRepo.delete({ expenseId });
+    if (allocations.length > 0) {
+      await this.allocationRepo.save(
+        allocations.map((a) => ({ ...a, expenseId })),
+      );
+    }
+  }
+
+  async findSharedDirectExpenses(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<ExpenseEntity[]> {
+    const query = this.expenseRepo
+      .createQueryBuilder('exp')
+      .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
+      .where('exp.scope = :scope', { scope: 'SHARED' })
+      .andWhere('exp.isInstallment = false');
+
+    if (startDate && endDate) {
+      query.andWhere('exp.expenseDate BETWEEN :startDate AND :endDate', { startDate, endDate });
+    }
+
+    return query.orderBy('exp.expenseDate', 'DESC').getMany();
+  }
+
+  async findSharedPaidInstallments(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<ExpenseInstallmentEntity[]> {
+    const query = this.installmentRepo
+      .createQueryBuilder('inst')
+      .innerJoinAndSelect('inst.expense', 'exp')
+      .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .leftJoinAndSelect('exp.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.member', 'allocationMember')
+      .where('exp.scope = :scope', { scope: 'SHARED' })
+      .andWhere('inst.status = :status', { status: 'PAID' });
+
+    if (startDate && endDate) {
+      query.andWhere(
+        '((inst.paidAt IS NOT NULL AND DATE(inst.paidAt) BETWEEN :startDate AND :endDate) OR (inst.paidAt IS NULL AND inst.dueDate BETWEEN :startDate AND :endDate))',
+        { startDate, endDate },
+      );
+    }
+
+    return query.orderBy('inst.dueDate', 'ASC').getMany();
+  }
+
+  // --- Budgets ---
+
+  async saveBudget(budget: Partial<CategoryBudgetEntity>): Promise<CategoryBudgetEntity> {
+    return this.budgetRepo.save(budget);
+  }
+
+  async findBudgets(activeOnly = true): Promise<CategoryBudgetEntity[]> {
+    return this.budgetRepo.find({
+      where: activeOnly ? { isActive: true } : {},
+      relations: { member: true },
+      order: { category: 'ASC' },
+    });
+  }
+
+  async findBudgetById(id: string): Promise<CategoryBudgetEntity | null> {
+    return this.budgetRepo.findOne({
+      where: { id },
+      relations: { member: true },
+    });
+  }
+
+  async findBudgetByMatch(
+    category: string,
+    currency: string,
+    scope: BudgetScope,
+    memberId?: string,
+  ): Promise<CategoryBudgetEntity | null> {
+    return this.budgetRepo.findOne({
+      where: {
+        category: category.toUpperCase(),
+        currency: currency.toUpperCase(),
+        scope,
+        memberId: memberId ? memberId : IsNull(),
+      },
+      relations: { member: true },
+    });
+  }
+
+  async deleteBudget(id: string): Promise<boolean> {
+    const result = await this.budgetRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  // --- Recurring / Fixed Expenses ---
+
+  async saveRecurringExpense(
+    recurring: Partial<RecurringExpenseEntity>,
+  ): Promise<RecurringExpenseEntity> {
+    return this.recurringRepo.save(recurring);
+  }
+
+  async findRecurringExpenses(activeOnly = true): Promise<RecurringExpenseEntity[]> {
+    return this.recurringRepo.find({
+      where: activeOnly ? { isActive: true } : {},
+      relations: { creditCard: true, paidByMember: true },
+      order: { dayOfMonth: 'ASC', merchantName: 'ASC' },
+    });
+  }
+
+  async findRecurringExpenseById(id: string): Promise<RecurringExpenseEntity | null> {
+    return this.recurringRepo.findOne({
+      where: { id },
+      relations: { creditCard: true, paidByMember: true },
+    });
+  }
+
+  async deleteRecurringExpense(id: string): Promise<boolean> {
+    const result = await this.recurringRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  async findFixedExpensesInDateRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<ExpenseEntity[]> {
+    return this.expenseRepo
+      .createQueryBuilder('exp')
+      .leftJoinAndSelect('exp.creditCard', 'card')
+      .leftJoinAndSelect('exp.paidByMember', 'paidByMember')
+      .where('exp.expenseDate BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .andWhere('(exp.isFixed = true OR exp.recurringExpenseId IS NOT NULL)')
+      .orderBy('exp.expenseDate', 'DESC')
+      .getMany();
   }
 }

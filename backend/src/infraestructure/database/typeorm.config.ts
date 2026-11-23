@@ -3,6 +3,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExpenseEntity } from '../../modules/expenses/data/entities/expense.entity';
 import { CreditCardEntity } from '../../modules/expenses/data/entities/credit-card.entity';
 import { ExpenseInstallmentEntity } from '../../modules/expenses/data/entities/expense-installment.entity';
+import { MemberEntity } from '../../modules/expenses/data/entities/member.entity';
+import { ExpenseAllocationEntity } from '../../modules/expenses/data/entities/expense-allocation.entity';
+import { CategoryBudgetEntity } from '../../modules/expenses/data/entities/category-budget.entity';
+import { RecurringExpenseEntity } from '../../modules/expenses/data/entities/recurring-expense.entity';
 
 export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
   imports: [ConfigModule],
@@ -14,7 +18,15 @@ export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
     username: configService.get<string>('DB_USER'),
     password: configService.get<string>('DB_PASSWORD'),
     database: configService.get<string>('DB_NAME'),
-    entities: [ExpenseEntity, CreditCardEntity, ExpenseInstallmentEntity],
+    entities: [
+      ExpenseEntity,
+      CreditCardEntity,
+      ExpenseInstallmentEntity,
+      MemberEntity,
+      ExpenseAllocationEntity,
+      CategoryBudgetEntity,
+      RecurringExpenseEntity,
+    ],
     synchronize: configService.get<boolean>('DB_SYNCHRONIZE', false),
     logging: configService.get<boolean>('DB_LOGGING', false),
   }),

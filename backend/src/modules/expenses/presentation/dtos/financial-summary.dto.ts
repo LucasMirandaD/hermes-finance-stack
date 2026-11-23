@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Matches } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEnum, IsOptional, IsString, Matches } from 'class-validator';
 
 export class FinancialSummaryQueryDto {
   @IsOptional()
@@ -15,6 +16,21 @@ export class FinancialSummaryQueryDto {
   @IsString()
   @Matches(/^\d{4}-\d{2}$/, { message: 'month must be in YYYY-MM format' })
   month?: string;
+
+  @IsOptional()
+  @IsEnum(['ALL', 'PERSONAL', 'SHARED'])
+  scope?: 'ALL' | 'PERSONAL' | 'SHARED';
+
+  @IsOptional()
+  @IsString()
+  memberRef?: string;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === undefined ? undefined : value === true || value === 'true',
+  )
+  @IsBoolean()
+  isFixed?: boolean;
 }
 
 export interface CategoryBreakdownDto {
@@ -27,6 +43,42 @@ export interface BankBreakdownDto {
   bank: string;
   amount: number;
   percentage: number;
+}
+
+export interface HolderBreakdownDto {
+  holderName: string;
+  paidAmount: number;
+  pendingAmount: number;
+  totalAmount: number;
+  percentage: number;
+}
+
+export interface FixedVsVariableDto {
+  fixedPaid: number;
+  variablePaid: number;
+  fixedPercentage: number;
+  variablePercentage: number;
+}
+
+export interface TopExpenseSummaryItemDto {
+  id: string;
+  date: string;
+  merchantName: string;
+  description: string;
+  amount: number;
+  category: string;
+  scope: string;
+  isFixed: boolean;
+  holderName: string;
+}
+
+export interface BudgetAlertItemDto {
+  category: string;
+  monthlyBudget: number;
+  spent: number;
+  percentageUsed: number;
+  alertThresholdPct: number;
+  exceeded: boolean;
 }
 
 export interface PeriodComparisonDto {
@@ -61,6 +113,10 @@ export interface FinancialSummaryResponseDto {
   pendingTransactionsCount: number;
   byCategory: CategoryBreakdownDto[];
   byBank: BankBreakdownDto[];
+  byHolder: HolderBreakdownDto[];
+  fixedVsVariable: FixedVsVariableDto;
+  topExpenses: TopExpenseSummaryItemDto[];
+  budgetAlerts: BudgetAlertItemDto[];
   comparison: PeriodComparisonDto;
   upcomingDue: UpcomingDueDto[];
 }

@@ -33,6 +33,21 @@ export class PaperlessService {
     return resolved;
   }
 
+  async checkHealth(): Promise<{ configured: boolean; reachable: boolean }> {
+    if (!this.apiToken) {
+      return { configured: false, reachable: false };
+    }
+    try {
+      const res = await fetch(`${this.baseUrl}/api/`, {
+        headers: { Authorization: `Token ${this.apiToken}` },
+        signal: AbortSignal.timeout(3000),
+      });
+      return { configured: true, reachable: res.ok };
+    } catch {
+      return { configured: true, reachable: false };
+    }
+  }
+
   private inferMimeType(filename: string): string {
     const ext = path.extname(filename).toLowerCase();
     if (ext === '.pdf') return 'application/pdf';

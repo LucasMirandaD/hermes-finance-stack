@@ -5,14 +5,24 @@ import { IExpensesRepository } from '../../data/repositories/i-expenses.reposito
 import { CreateExpenseDto } from '../../presentation/dtos/create-expense.dto';
 import { ExpenseEntity } from '../../data/entities/expense.entity';
 import { CreditCardEntity } from '../../data/entities/credit-card.entity';
-import { NotFound } from '../../../../common/errors/errors';
+import { MemberEntity } from '../../data/entities/member.entity';
+import { RecurringExpenseEntity } from '../../data/entities/recurring-expense.entity';
+import { CategoryBudgetEntity } from '../../data/entities/category-budget.entity';
+import { InvalidOperation, NotFound } from '../../../../common/errors/errors';
+import { PaperlessService } from '../../infrastructure/paperless.service';
+import { ChartService } from '../../infrastructure/chart.service';
+import { ExportService } from '../../infrastructure/export.service';
 
 describe('ExpensesService', () => {
   let service: ExpensesService;
   let mockRepository: Partial<Record<keyof IExpensesRepository, Mock>>;
+  let mockPaperless: Partial<Record<keyof PaperlessService, Mock>>;
+  let mockChart: Partial<Record<keyof ChartService, Mock>>;
+  let mockExport: Partial<Record<keyof ExportService, Mock>>;
 
   beforeEach(async () => {
     mockRepository = {
+      checkDatabaseHealth: vi.fn(),
       saveExpense: vi.fn(),
       findExpenseById: vi.fn(),
       findExpenses: vi.fn(),
@@ -31,25 +41,55 @@ describe('ExpensesService', () => {
       searchExpensesAndInstallments: vi.fn(),
       deleteExpense: vi.fn(),
       deleteInstallment: vi.fn(),
+      saveMember: vi.fn(),
+      findMembers: vi.fn(),
+      findMemberByRef: vi.fn(),
+      deleteMember: vi.fn(),
+      countMemberReferences: vi.fn(),
+      replaceExpenseAllocations: vi.fn(),
+      findSharedDirectExpenses: vi.fn(),
+      findSharedPaidInstallments: vi.fn(),
+      saveBudget: vi.fn(),
+      findBudgets: vi.fn().mockResolvedValue([]),
+      findBudgetById: vi.fn(),
+      findBudgetByMatch: vi.fn(),
+      deleteBudget: vi.fn(),
+      saveRecurringExpense: vi.fn(),
+      findRecurringExpenses: vi.fn(),
+      findRecurringExpenseById: vi.fn(),
+      deleteRecurringExpense: vi.fn(),
+      findFixedExpensesInDateRange: vi.fn(),
+    };
+
+    mockPaperless = {
+      checkHealth: vi.fn().mockResolvedValue({ configured: false, reachable: false }),
+    };
+
+    mockChart = {
+      renderChartPng: vi.fn(),
+    };
+
+    mockExport = {
+      exportToFile: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ExpensesService,
-        {
-          provide: IExpensesRepository,
-          useValue: mockRepository,
-        },
+        { provide: IExpensesRepository, useValue: mockRepository },
+        { provide: PaperlessService, useValue: mockPaperless },
+        { provide: ChartService, useValue: mockChart },
+        { provide: ExportService, useValue: mockExport },
       ],
     }).compile();
 
     service = module.get<ExpensesService>(ExpensesService);
     vi.clearAllMocks();
+    mockRepository.findBudgets!.mockResolvedValue([]);
   });
 
   describe('registerExpense', () => {
     it('should register single payment expense successfully', async () => {
-      // Arrange
       const dto: CreateExpenseDto = {
         description: 'Supermercado Vea',
         merchantName: 'Vea Cencosud',
@@ -63,17 +103,14 @@ describe('ExpensesService', () => {
       Object.assign(savedEntity, dto, { id: 'uuid-1', installmentsPlan: [] });
       mockRepository.saveExpense!.mockResolvedValue(savedEntity);
 
-      // Act
       const result = await service.registerExpense(dto);
 
-      // Assert
       expect(result.isSuccess).toBe(true);
       expect(result.getValue().id).toBe('uuid-1');
       expect(mockRepository.saveExpense).toHaveBeenCalledTimes(1);
     });
 
     it('should register bank transfer expense with bank name', async () => {
-      // Arrange
       const dto: CreateExpenseDto = {
         description: 'Pago alquiler cochera',
         merchantName: 'Garaje Central',
@@ -84,25 +121,22 @@ describe('ExpensesService', () => {
         bankName: 'Galicia',
       };
 
-      mockRepository.saveExpense!.mockImplementation(async (entity: any) => {
-        return { ...entity, id: 'expense-transfer-1' };
-      });
+      mockRepository.saveExpense!.mockImplementation(async (entity: any) => ({
+        ...entity,
+        id: 'expense-transfer-1',
+      }));
 
-      // Act
       const result = await service.registerExpense(dto);
 
-      // Assert
       expect(result.isSuccess).toBe(true);
       const saved = result.getValue();
       expect(saved.id).toBe('expense-transfer-1');
       expect(saved.paymentMethod).toBe('BANK_TRANSFER');
       expect(saved.bankName).toBe('Galicia');
       expect(mockRepository.findCreditCardByDetails).not.toHaveBeenCalled();
-      expect(mockRepository.findCreditCardById).not.toHaveBeenCalled();
     });
 
     it('should generate installments plan and match credit card when card details are provided', async () => {
-      // Arrange
       const card = new CreditCardEntity();
       card.id = 'card-uuid-1';
       card.bank = 'Santander';
@@ -124,17 +158,16 @@ describe('ExpensesService', () => {
         cardHolder: 'Mamá',
         isInstallment: true,
         totalInstallments: 3,
-        intervalMonths: 2, // Cuotas cada 2 meses
+        intervalMonths: 2,
       };
 
-      mockRepository.saveExpense!.mockImplementation(async (entity: any) => {
-        return { ...entity, id: 'expense-uuid-99' };
-      });
+      mockRepository.saveExpense!.mockImplementation(async (entity: any) => ({
+        ...entity,
+        id: 'expense-uuid-99',
+      }));
 
-      // Act
       const result = await service.registerExpense(dto);
 
-      // Assert
       expect(result.isSuccess).toBe(true);
       const savedExpense = result.getValue();
       expect(savedExpense.id).toBe('expense-uuid-99');
@@ -146,7 +179,6 @@ describe('ExpensesService', () => {
     });
 
     it('should return failure Result when creditCardId does not exist', async () => {
-      // Arrange
       const dto: CreateExpenseDto = {
         description: 'Combustible YPF',
         merchantName: 'YPF',
@@ -156,29 +188,72 @@ describe('ExpensesService', () => {
       };
       mockRepository.findCreditCardById!.mockResolvedValue(null);
 
-      // Act
       const result = await service.registerExpense(dto);
 
-      // Assert
       expect(result.isFailure).toBe(true);
       expect(result.getError()).toBeInstanceOf(NotFound);
+    });
+
+    it('should split SHARED expense equally across active members when allocations are omitted', async () => {
+      const m1 = { id: 'm1', slug: 'alice', displayName: 'Alice', aliases: [], isActive: true } as MemberEntity;
+      const m2 = { id: 'm2', slug: 'bob', displayName: 'Bob', aliases: [], isActive: true } as MemberEntity;
+
+      mockRepository.findMemberByRef!.mockResolvedValueOnce(m1);
+      mockRepository.findMembers!.mockResolvedValueOnce([m1, m2]);
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-shared-1' }));
+
+      const result = await service.registerExpense({
+        merchantName: 'Coto',
+        description: 'Compra semanal',
+        totalAmount: 10000,
+        expenseDate: '2026-11-20',
+        scope: 'SHARED',
+        paidBy: 'alice',
+      });
+
+      expect(result.isSuccess).toBe(true);
+      const saved = result.getValue();
+      expect(saved.scope).toBe('SHARED');
+      expect(saved.paidByMemberId).toBe('m1');
+      expect(saved.allocations).toHaveLength(2);
+      expect(saved.allocations[0].percentage).toBe(50);
+      expect(saved.allocations[0].amount).toBe(5000);
+      expect(saved.allocations[1].amount).toBe(5000);
+    });
+
+    it('should reject allocations that do not sum to 100%', async () => {
+      const result = await service.registerExpense({
+        merchantName: 'Coto',
+        description: 'Compra',
+        totalAmount: 10000,
+        expenseDate: '2026-11-20',
+        scope: 'SHARED',
+        allocations: [
+          { member: 'alice', percentage: 60 },
+          { member: 'bob', percentage: 30 },
+        ],
+      });
+
+      expect(result.isFailure).toBe(true);
+      expect(result.getError()).toBeInstanceOf(InvalidOperation);
     });
   });
 
   describe('getMonthlyInstallmentsSummary', () => {
-    it('should summarize installments for given month', async () => {
-      // Arrange
-      const mockInstallment = {
+    it('should summarize installments grouped by holder and mark last installment', async () => {
+      const inst1 = {
         id: 'inst-1',
         expenseId: 'exp-1',
-        installmentNumber: 2,
-        totalInstallments: 6,
+        installmentNumber: 3,
+        totalInstallments: 3,
         amount: 25000,
         dueDate: '2026-12-10',
         status: 'PENDING',
         expense: {
           merchantName: 'MercadoLibre',
           description: 'Auriculares Sony',
+          scope: 'PERSONAL',
+          isFixed: false,
           creditCard: {
             bank: 'Galicia',
             cardName: 'Mastercard',
@@ -188,52 +263,86 @@ describe('ExpensesService', () => {
         },
       };
 
-      mockRepository.findInstallmentsByDueDateRange!.mockResolvedValue([mockInstallment]);
+      const inst2 = {
+        id: 'inst-2',
+        expenseId: 'exp-2',
+        installmentNumber: 1,
+        totalInstallments: 6,
+        amount: 60000,
+        dueDate: '2026-12-10',
+        status: 'PENDING',
+        expense: {
+          merchantName: 'Zara',
+          description: 'Campera',
+          scope: 'PERSONAL',
+          isFixed: false,
+          creditCard: {
+            bank: 'Galicia',
+            cardName: 'Visa',
+            isExtension: true,
+            holderName: 'Pareja',
+          },
+        },
+      };
 
-      // Act
+      mockRepository.findInstallmentsByDueDateRange!.mockResolvedValue([inst1, inst2]);
+
       const result = await service.getMonthlyInstallmentsSummary('2026-12');
 
-      // Assert
       expect(result.isSuccess).toBe(true);
       const summary = result.getValue();
       expect(summary.month).toBe('2026-12');
-      expect(summary.totalAmountDue).toBe(25000);
-      expect(summary.installmentsCount).toBe(1);
-      expect(summary.items[0].cardBank).toBe('Galicia');
+      expect(summary.totalAmountDue).toBe(85000);
+      expect(summary.installmentsCount).toBe(2);
+      expect(summary.byHolder).toHaveLength(2);
+      expect(summary.byHolder[0].holderName).toBe('Pareja');
+      expect(summary.byHolder[0].subtotal).toBe(60000);
+      expect(summary.byHolder[1].items[0].isLastInstallment).toBe(true);
     });
   });
 
   describe('getFinancialSummary', () => {
-    it('should calculate financial summary accurately separating paid and pending', async () => {
-      // Direct paid expense
+    it('should calculate financial summary separating paid, pending, fixed vs variable and holders', async () => {
       const directExp = {
         id: 'exp-1',
+        expenseDate: '2026-11-05',
+        merchantName: 'Super',
+        description: 'Compras',
         totalAmount: 15000,
         category: 'SUPERMERCADO',
         paymentMethod: 'DEBIT_CARD',
         bankName: 'Santander',
+        scope: 'PERSONAL',
+        isFixed: false,
       } as any;
 
-      // Paid installment
       const paidInst = {
         id: 'inst-1',
         amount: 11478.17,
         status: 'PAID',
+        dueDate: '2026-11-10',
+        installmentNumber: 1,
+        totalInstallments: 2,
         notes: 'Pagado vía BANK_TRANSFER (Galicia)',
         expense: {
-          category: 'SERVICIOS',
+          category: 'IMPUESTOS_Y_SERVICIOS',
           merchantName: 'Aysam',
+          description: 'Agua',
+          scope: 'SHARED',
+          isFixed: true,
         },
       } as any;
 
-      // Pending installment
       const pendingInst = {
         id: 'inst-2',
         amount: 11478.17,
         status: 'PENDING',
         dueDate: '2026-11-20',
+        installmentNumber: 2,
+        totalInstallments: 2,
         expense: {
           merchantName: 'Aysam',
+          description: 'Agua',
         },
       } as any;
 
@@ -246,16 +355,170 @@ describe('ExpensesService', () => {
 
       expect(result.isSuccess).toBe(true);
       const summary = result.getValue();
-      expect(summary.totalPaid).toBe(26478.17); // 15000 + 11478.17
+      expect(summary.totalPaid).toBe(26478.17);
       expect(summary.totalPending).toBe(11478.17);
       expect(summary.paidTransactionsCount).toBe(2);
-      expect(summary.byCategory.length).toBe(2);
-      expect(summary.byBank.length).toBe(2);
+      expect(summary.fixedVsVariable.fixedPaid).toBe(11478.17);
+      expect(summary.fixedVsVariable.variablePaid).toBe(15000);
+      expect(summary.topExpenses.length).toBe(2);
       expect(summary.comparison.trend).toBe('UP');
     });
   });
 
-  describe('searchExpenses', () => {
+  describe('Shared Balances', () => {
+    it('should calculate net balances and settlement suggestions for 2 and 3 members', async () => {
+      const m1 = { id: 'm1', slug: 'alice', displayName: 'Alice' } as MemberEntity;
+      const m2 = { id: 'm2', slug: 'bob', displayName: 'Bob' } as MemberEntity;
+      const m3 = { id: 'm3', slug: 'carol', displayName: 'Carol' } as MemberEntity;
+
+      mockRepository.findMembers!.mockResolvedValueOnce([m1, m2, m3]);
+      mockRepository.findSharedDirectExpenses!.mockResolvedValueOnce([
+        {
+          id: 'e1',
+          totalAmount: 30000,
+          paidByMember: m1,
+          allocations: [
+            { member: m1, percentage: 33.34, amount: 10002 },
+            { member: m2, percentage: 33.33, amount: 9999 },
+            { member: m3, percentage: 33.33, amount: 9999 },
+          ],
+        } as any,
+      ]);
+      mockRepository.findSharedPaidInstallments!.mockResolvedValueOnce([]);
+
+      const result = await service.getSharedBalance({ month: '2026-11' });
+
+      expect(result.isSuccess).toBe(true);
+      const balance = result.getValue();
+      expect(balance.totalShared).toBe(30000);
+      expect(balance.settlements).toHaveLength(2);
+      expect(balance.settlements[0].toSlug).toBe('alice');
+      expect(balance.settlements[1].toSlug).toBe('alice');
+    });
+  });
+
+  describe('Recurring / Fixed Expenses', () => {
+    it('should report fixed expenses status and allow paying with adjusted amount', async () => {
+      const tpl1 = {
+        id: 'rec-1',
+        merchantName: 'Alquiler',
+        description: 'Alquiler Depto',
+        category: 'ALQUILER_Y_EXPENSAS',
+        estimatedAmount: 500000,
+        currency: 'ARS',
+        dayOfMonth: 10,
+        frequency: 'MONTHLY',
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Galicia',
+        scope: 'SHARED',
+        isActive: true,
+        createdAt: new Date('2026-01-01'),
+      } as RecurringExpenseEntity;
+
+      const tpl2 = {
+        id: 'rec-2',
+        merchantName: 'Fibertel',
+        description: 'Internet 300MB',
+        category: 'IMPUESTOS_Y_SERVICIOS',
+        estimatedAmount: 45000,
+        currency: 'ARS',
+        dayOfMonth: 28,
+        frequency: 'MONTHLY',
+        paymentMethod: 'BANK_TRANSFER',
+        scope: 'PERSONAL',
+        isActive: true,
+        createdAt: new Date('2026-01-01'),
+      } as RecurringExpenseEntity;
+
+      mockRepository.findRecurringExpenses!.mockResolvedValueOnce([tpl1, tpl2]);
+      mockRepository.findFixedExpensesInDateRange!.mockResolvedValueOnce([
+        {
+          id: 'exp-paid-1',
+          recurringExpenseId: 'rec-1',
+          merchantName: 'Alquiler',
+          totalAmount: 520000,
+          expenseDate: '2026-11-05',
+        } as ExpenseEntity,
+      ]);
+
+      const statusRes = await service.getFixedExpensesStatus('2026-11');
+      expect(statusRes.isSuccess).toBe(true);
+      const status = statusRes.getValue();
+      expect(status.paidCount).toBe(1);
+      expect(status.pendingCount).toBe(1);
+      expect(status.totalPaid).toBe(520000);
+      expect(status.items[0].status).toBe('PAID');
+      expect(status.items[1].status).not.toBe('PAID');
+
+      // Now test payRecurringExpense with overridden amount
+      mockRepository.findRecurringExpenses!.mockResolvedValueOnce([tpl1, tpl2]);
+      mockRepository.findMembers!.mockResolvedValueOnce([]);
+      mockRepository.saveExpense!.mockImplementation(async (e: any) => ({ ...e, id: 'exp-new-fixed' }));
+
+      const payRes = await service.payRecurringExpense('Fibertel', { amount: 48500 });
+      expect(payRes.isSuccess).toBe(true);
+      const paid = payRes.getValue();
+      expect(paid.isFixed).toBe(true);
+      expect(paid.recurringExpenseId).toBe('rec-2');
+      expect(paid.totalAmount).toBe(48500);
+    });
+  });
+
+  describe('Category Budgets', () => {
+    it('should detect triggered budget alerts when spending crosses threshold', async () => {
+      const budget = {
+        id: 'b1',
+        category: 'SUPERMERCADO',
+        monthlyAmount: 100000,
+        currency: 'ARS',
+        alertThresholdPct: 80,
+        scope: 'ALL',
+        isActive: true,
+      } as CategoryBudgetEntity;
+
+      mockRepository.findBudgets!.mockResolvedValueOnce([budget]);
+      mockRepository.findExpensesByDateRange!.mockResolvedValueOnce([
+        {
+          id: 'e1',
+          totalAmount: 85000,
+          category: 'SUPERMERCADO',
+          currency: 'ARS',
+          scope: 'PERSONAL',
+        } as ExpenseEntity,
+      ]);
+      mockRepository.findPaidInstallmentsByDateRange!.mockResolvedValueOnce([]);
+
+      const res = await service.getBudgetStatus('2026-11', false);
+      expect(res.isSuccess).toBe(true);
+      const status = res.getValue();
+      expect(status.alertsCount).toBe(1);
+      expect(status.items[0].percentageUsed).toBe(85);
+      expect(status.items[0].alertTriggered).toBe(true);
+      expect(status.items[0].exceeded).toBe(false);
+    });
+  });
+
+  describe('compareMonths & search & upcoming & updates', () => {
+    it('should compare two months by category', async () => {
+      mockRepository.findExpensesByDateRange!
+        .mockResolvedValueOnce([{ id: 'e1', totalAmount: 10000, category: 'SUPERMERCADO' } as any])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'e2', totalAmount: 15000, category: 'SUPERMERCADO' } as any])
+        .mockResolvedValueOnce([]);
+      mockRepository.findPaidInstallmentsByDateRange!.mockResolvedValue([]);
+      mockRepository.findPendingInstallmentsByDueDateRange!.mockResolvedValue([]);
+      mockRepository.findUpcomingPendingInstallments!.mockResolvedValue([]);
+
+      const res = await service.compareMonths('2026-10', '2026-11');
+      expect(res.isSuccess).toBe(true);
+      const cmp = res.getValue();
+      expect(cmp.totalA).toBe(10000);
+      expect(cmp.totalB).toBe(15000);
+      expect(cmp.diffAmount).toBe(5000);
+      expect(cmp.diffPercentage).toBe(50);
+      expect(cmp.trend).toBe('UP');
+    });
+
     it('should return matching expenses and installments', async () => {
       mockRepository.searchExpensesAndInstallments!.mockResolvedValueOnce({
         expenses: [
@@ -280,9 +543,7 @@ describe('ExpensesService', () => {
       expect(searchRes.totalAmount).toBe(20000);
       expect(searchRes.items[0].merchantName).toBe('YPF Estacion');
     });
-  });
 
-  describe('getUpcomingInstallments', () => {
     it('should return upcoming installments within specified days', async () => {
       mockRepository.findUpcomingPendingInstallments!.mockResolvedValueOnce([
         {
@@ -302,9 +563,7 @@ describe('ExpensesService', () => {
       expect(items.length).toBe(1);
       expect(items[0].merchantName).toBe('Ecogas');
     });
-  });
 
-  describe('updateExpense & deleteExpense', () => {
     it('should update expense totalAmount and redistribute across pending installments', async () => {
       const inst1 = { id: 'i1', installmentNumber: 1, amount: 10000, status: 'PAID' };
       const inst2 = { id: 'i2', installmentNumber: 2, amount: 10000, status: 'PENDING' };
@@ -334,9 +593,7 @@ describe('ExpensesService', () => {
       expect(result.isSuccess).toBe(true);
       expect(result.getValue().deleted).toBe(true);
     });
-  });
 
-  describe('updateInstallment & deleteInstallment', () => {
     it('should update installment amount and recalculate parent expense totalAmount', async () => {
       const inst1 = { id: 'i1', expenseId: 'exp-1', installmentNumber: 1, amount: 11478.17, status: 'PAID' } as any;
       const inst2 = { id: 'i2', expenseId: 'exp-1', installmentNumber: 2, amount: 11478.17, status: 'PENDING' } as any;

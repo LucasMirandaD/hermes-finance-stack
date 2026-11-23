@@ -22,10 +22,24 @@ display:
   tool_progress: "off"
   cleanup_progress: true
   long_running_notifications: false
+  interim_assistant_messages: false
+  turn_completion_explainer: false
+  language: "es"
   platforms:
     telegram:
       tool_progress: "off"
       cleanup_progress: true
+
+telegram:
+  reactions: true
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+sessions:
+  auto_archive: true
+  auto_archive_days: 3
 
 platforms:
   telegram:
@@ -39,6 +53,8 @@ platforms:
         priority_mode: prepend
         priority:
           - facturas-ocr-gastos
+          - monthly-summary-format
+          - onboarding
 
 platform_toolsets:
   cli: [hermes-cli]
@@ -46,6 +62,10 @@ platform_toolsets:
 
 skills:
   creation_nudge_interval: 0
+  auto_load:
+    - facturas-ocr-gastos
+    - monthly-summary-format
+    - onboarding
 
 mcp_servers:
   expenses:

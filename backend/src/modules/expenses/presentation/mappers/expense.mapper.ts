@@ -14,6 +14,25 @@ export class ExpenseMapper {
       expenseDate: entity.expenseDate,
       paymentMethod: entity.paymentMethod,
       bankName: entity.bankName,
+      scope: entity.scope || 'PERSONAL',
+      isFixed: Boolean(entity.isFixed),
+      recurringExpenseId: entity.recurringExpenseId,
+      paidByMember: entity.paidByMember
+        ? {
+            id: entity.paidByMember.id,
+            slug: entity.paidByMember.slug,
+            displayName: entity.paidByMember.displayName,
+          }
+        : undefined,
+      allocations: entity.allocations?.length
+        ? entity.allocations.map((a) => ({
+            memberId: a.memberId,
+            memberSlug: a.member?.slug || a.memberId,
+            displayName: a.member?.displayName || a.member?.slug || a.memberId,
+            percentage: Number(a.percentage),
+            amount: Number(a.amount),
+          }))
+        : undefined,
       isInstallment: entity.isInstallment,
       totalInstallments: entity.totalInstallments,
       intervalMonths: entity.intervalMonths,

@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -8,14 +9,30 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Matches,
+  Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
+  ExpenseScope,
   ExpenseSource,
   PaymentMethod,
 } from '../../domain/interfaces/expense.interface';
+
+export class ExpenseAllocationInputDto {
+  @IsNotEmpty()
+  @IsString()
+  member: string;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(100)
+  @Type(() => Number)
+  percentage: number;
+}
 
 export class CreateExpenseDto {
   @IsNotEmpty()
@@ -65,6 +82,28 @@ export class CreateExpenseDto {
   @IsOptional()
   @IsString()
   cardHolder?: string;
+
+  @IsOptional()
+  @IsEnum(['PERSONAL', 'SHARED'])
+  scope?: ExpenseScope = 'PERSONAL';
+
+  @IsOptional()
+  @IsBoolean()
+  isFixed?: boolean = false;
+
+  @IsOptional()
+  @IsString()
+  paidBy?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpenseAllocationInputDto)
+  allocations?: ExpenseAllocationInputDto[];
+
+  @IsOptional()
+  @IsUUID()
+  recurringExpenseId?: string;
 
   @IsOptional()
   @IsBoolean()

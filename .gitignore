@@ -11,7 +11,17 @@ backend/*.tsbuildinfo
 
 # Hermes Agent Runtime State (generated inside ./hermes/ on boot)
 hermes/.env
+hermes/.env.lock
+hermes/.install_id.lock
+hermes/.mcp-discovery.lock
+hermes/.restart_last_processed.json
+hermes/.skills_prompt_snapshot.json
+hermes/.curator_backups/
+hermes/install_id
 hermes/state.db*
+hermes/kanban.db*
+hermes/response_store.db*
+hermes/runs_idempotency.db*
 hermes/logs/
 hermes/sessions/
 hermes/cache/
@@ -20,12 +30,40 @@ hermes/audio_cache/
 hermes/document_cache/
 hermes/memories/
 hermes/pairing/
+hermes/platforms/
+hermes/runtime/
+hermes/backups/
+hermes/state/
+hermes/gateway/
+hermes/gateway.lock
+hermes/gateway.pid
+hermes/gateway_state.json
+hermes/channel_directory.json
+hermes/pending_messages/
+hermes/installs/
+hermes/plugin-update-checks/
+hermes/plans/
 hermes/kanban/
 hermes/cron/
 hermes/hooks/
 hermes/browser_screenshots/
-hermes/auth.json
+hermes/auth.json*
+hermes/auth.lock
 hermes/profiles.json
+hermes/telegram_update_receipts_*.json
+
+# Hermes Generated Charts & Exports (keep directories tracked via .gitkeep)
+hermes/charts/*
+!hermes/charts/.gitkeep
+hermes/exports/*
+!hermes/exports/.gitkeep
+
+# Hermes Bundled / Curator Metadata inside skills/
+hermes/skills/.bundled_manifest
+hermes/skills/.curator_ledger.jsonl
+hermes/skills/.curator_state
+hermes/skills/.usage.json*
+hermes/skills/.locks/
 
 # OS & Editors
 .DS_Store

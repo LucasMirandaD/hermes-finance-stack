@@ -7,6 +7,21 @@ export class ExpenseResponseDto {
   expenseDate: string;
   paymentMethod: string;
   bankName?: string;
+  scope: string;
+  isFixed: boolean;
+  recurringExpenseId?: string;
+  paidByMember?: {
+    id: string;
+    slug: string;
+    displayName: string;
+  };
+  allocations?: {
+    memberId: string;
+    memberSlug: string;
+    displayName: string;
+    percentage: number;
+    amount: number;
+  }[];
   isInstallment: boolean;
   totalInstallments: number;
   intervalMonths: number;

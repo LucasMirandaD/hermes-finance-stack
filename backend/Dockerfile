@@ -27,6 +27,8 @@ WORKDIR /usr/src/app
 ENV NODE_ENV=production
 ENV PORT=3000
 
+RUN apk add --no-cache font-dejavu
+
 # Non-root user for security
 USER node
 

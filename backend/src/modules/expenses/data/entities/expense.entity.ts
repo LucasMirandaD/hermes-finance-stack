@@ -11,7 +11,11 @@ import {
 } from 'typeorm';
 import { CreditCardEntity } from './credit-card.entity';
 import { ExpenseInstallmentEntity } from './expense-installment.entity';
+import { ExpenseAllocationEntity } from './expense-allocation.entity';
+import { MemberEntity } from './member.entity';
+import { RecurringExpenseEntity } from './recurring-expense.entity';
 import {
+  ExpenseScope,
   ExpenseSource,
   IExpense,
   PaymentMethod,
@@ -21,6 +25,10 @@ import {
 @Index('idx_expenses_date', ['expenseDate'])
 @Index('idx_expenses_card', ['creditCardId'])
 @Index('idx_expenses_source', ['source'])
+@Index('idx_expenses_scope', ['scope'])
+@Index('idx_expenses_is_fixed', ['isFixed'])
+@Index('idx_expenses_paid_by_member', ['paidByMemberId'])
+@Index('idx_expenses_recurring', ['recurringExpenseId'])
 export class ExpenseEntity implements IExpense {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -60,6 +68,39 @@ export class ExpenseEntity implements IExpense {
   })
   @JoinColumn({ name: 'credit_card_id' })
   creditCard?: CreditCardEntity;
+
+  @Column({ type: 'varchar', length: 20, default: 'PERSONAL' })
+  scope: ExpenseScope;
+
+  @Column({ name: 'is_fixed', type: 'boolean', default: false })
+  isFixed: boolean;
+
+  @Column({ name: 'paid_by_member_id', type: 'uuid', nullable: true })
+  paidByMemberId?: string;
+
+  @ManyToOne(() => MemberEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+    eager: true,
+  })
+  @JoinColumn({ name: 'paid_by_member_id' })
+  paidByMember?: MemberEntity;
+
+  @Column({ name: 'recurring_expense_id', type: 'uuid', nullable: true })
+  recurringExpenseId?: string;
+
+  @ManyToOne(() => RecurringExpenseEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'recurring_expense_id' })
+  recurringExpense?: RecurringExpenseEntity;
+
+  @OneToMany(() => ExpenseAllocationEntity, (allocation) => allocation.expense, {
+    cascade: true,
+    eager: true,
+  })
+  allocations: ExpenseAllocationEntity[];
 
   @Column({ name: 'is_installment', type: 'boolean', default: false })
   isInstallment: boolean;

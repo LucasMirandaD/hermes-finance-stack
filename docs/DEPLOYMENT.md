@@ -84,7 +84,33 @@ docker compose up -d --build
 
 ---
 
-## 5. Backups & Permissions
+## 5. Upgrading PostgreSQL 17 → PostgreSQL 18
+
+Starting with `v2.0.1`, `docker-compose.yml` uses `postgres:18-alpine` with the official PostgreSQL 18+ volume mount path (`/var/lib/postgresql`, which stores cluster files under `/var/lib/postgresql/18/docker` to simplify future `pg_upgrade` operations).
+
+> **Important**: Major PostgreSQL versions cannot reuse an existing PG 17 data directory in place. If you already have a running PG 17 volume, back up and restore cleanly:
+
+```bash
+# 1. Dump your existing PG 17 database BEFORE pulling postgres:18-alpine
+docker exec expenses-postgres pg_dump -U "${EXPENSES_DB_USER:-expenses_user}" "${EXPENSES_DB_NAME:-expenses_db}" > backup_pg17_$(date +%Y%m%d).sql
+
+# 2. Stop the stack and remove the old PG 17 volume (keep your .sql backup safe!)
+docker compose down
+docker volume rm hermes-finance-stack_postgres_data
+
+# 3. Pull and start PostgreSQL 18 + the stack
+git pull origin main
+docker compose up -d --build postgres
+
+# 4. Restore the dump into PostgreSQL 18 and bring up the remaining services
+docker exec -i expenses-postgres psql -U "${EXPENSES_DB_USER:-expenses_user}" -d "${EXPENSES_DB_NAME:-expenses_db}" < backup_pg17_$(date +%Y%m%d).sql
+docker compose up -d --build
+./scripts/smoke-test.sh
+```
+
+---
+
+## 6. Backups & Permissions
 
 - **Database backup**:
   ```bash

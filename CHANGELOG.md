@@ -2,6 +2,17 @@
 
 Notable changes to **Hermes Finance Stack** follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-23
+
+### Changed
+- **PostgreSQL 18 Upgrade**: Updated `docker-compose.yml` from `postgres:17-alpine` to `postgres:18-alpine` using the official PostgreSQL 18+ volume mount path (`postgres_data:/var/lib/postgresql`).
+- **Flagship Bilingual Documentation**: Expanded `README.md` and `README.es.md` with full capability matrices, 6 end-to-end Telegram scenarios, 10-table Mermaid ER schema, LLM model/cost guide, security architecture, and full visible MCP/REST references.
+- **Onboarding Skill Polish**: Updated tool count reference in `hermes/skills/finanzas/onboarding/SKILL.md` to 43 tools.
+
+### Added
+- **Real Native PNG Chart Previews**: Rendered and embedded 3 authentic `@resvg/resvg-wasm` charts (`docs/assets/chart-by-category.png`, `chart-monthly-trend.png`, `chart-top-expenses.png`) directly in both READMEs.
+- **PostgreSQL 17 → 18 Upgrade Runbook**: Documented dump/restore steps and volume mount changes in `docs/DEPLOYMENT.md`.
+
 ## [2.0.0] - 2026-11-23
 
 ### Added

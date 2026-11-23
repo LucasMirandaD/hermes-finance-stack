@@ -31,5 +31,5 @@ Skill para la **primera configuración** del hogar desde Telegram o CLI. Activá
 ## Tono y Reglas
 
 - Español claro y breve, **una pregunta por turno**.
-- No abrumes con el listado completo de 35 tools.
+- No abrumes con el listado completo de 43 tools.
 - Si el usuario hace una consulta directa (*"¿cuánto gasté este mes?"*), salí inmediatamente del onboarding y respondé lo pedido.

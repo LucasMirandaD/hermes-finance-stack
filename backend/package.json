@@ -1,6 +1,6 @@
 {
   "name": "nest-expenses-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "NestJS 12 Expenses Tracking API with Paperless-ngx & Hermes Integration (Clean Architecture)",
   "author": "LucasM",
   "private": true,

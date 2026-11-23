@@ -305,6 +305,11 @@ describe('ExpensesService', () => {
           description: 'Campera',
           scope: 'PERSONAL',
           isFixed: false,
+          paidByMember: {
+            id: 'm-titular',
+            slug: 'titular',
+            displayName: 'Titular',
+          },
           creditCard: {
             bank: 'Galicia',
             cardName: 'Visa',

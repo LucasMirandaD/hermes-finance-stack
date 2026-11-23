@@ -267,13 +267,12 @@ pnpm test    # Vitest (38 tests across 9 files, including outings, PNG charts & 
 pnpm build
 ```
 
-### Idempotent PostgreSQL migration (for existing databases with `DB_SYNCHRONIZE=false`)
+### Idempotent PostgreSQL migration (upgrading from v1.x with `DB_SYNCHRONIZE=false`)
+
+Use the automated migration script (takes a `pg_dump` backup first, runs `001` & `002`, and optionally normalizes legacy categories and backfills a default owner):
 
 ```bash
-docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
-  < backend/sql/001_multiuser_budgets_fixed_expenses.sql
-docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
-  < backend/sql/002_outings.sql
+./scripts/migrate.sh --normalize-categories --backfill-owner "YourName"
 ```
 
 ---

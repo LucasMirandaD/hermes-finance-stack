@@ -208,6 +208,9 @@ export class ExpensesService implements IExpensesService {
 
   private getHolderLabel(expense?: Partial<ExpenseEntity>): string {
     if (!expense) return 'Sin titular';
+    if (expense.creditCard?.isExtension && expense.creditCard?.holderName) {
+      return expense.creditCard.holderName;
+    }
     if (expense.paidByMember?.displayName) return expense.paidByMember.displayName;
     if (expense.creditCard?.holderName) return expense.creditCard.holderName;
     return 'Sin titular';

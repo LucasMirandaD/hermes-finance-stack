@@ -297,3 +297,18 @@ WHERE r.is_active = TRUE
       )
   )
 ORDER BY r.day_of_month ASC;
+
+-- 15. Salidas / Eventos Compartidos y Total Gastado
+SELECT
+  o.event_date AS "Fecha",
+  o.name AS "Salida / Evento",
+  o.status AS "Estado",
+  o.currency AS "Moneda",
+  COUNT(DISTINCT p.id) AS "Participantes",
+  COUNT(DISTINCT e.id) AS "Cantidad Gastos",
+  COALESCE(SUM(e.amount), 0) AS "Total Gastado"
+FROM outings o
+LEFT JOIN outing_participants p ON p.outing_id = o.id
+LEFT JOIN outing_expenses e ON e.outing_id = o.id
+GROUP BY o.id, o.event_date, o.name, o.status, o.currency
+ORDER BY o.event_date DESC;

@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './infraestructure/config/env.schema';
 import { typeOrmAsyncConfig } from './infraestructure/database/typeorm.config';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { OutingsModule } from './modules/outings/outings.module';
+import { McpModule } from './modules/mcp/mcp.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -14,6 +16,8 @@ import { AppController } from './app.controller';
     }),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     ExpensesModule,
+    OutingsModule,
+    McpModule,
   ],
   controllers: [AppController],
 })

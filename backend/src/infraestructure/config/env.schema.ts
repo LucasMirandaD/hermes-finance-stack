@@ -16,7 +16,7 @@ export const EnvSchema = z.object({
     .string()
     .optional()
     .transform((val) => val === 'true'),
-  PAPERLESS_BASE_URL: z.string().url().default('http://paperless:8000'),
+  PAPERLESS_BASE_URL: z.string().optional().default(''),
   PAPERLESS_API_TOKEN: z.string().optional(),
   CHARTS_DIR: z.string().default('/opt/data/charts'),
   EXPORTS_DIR: z.string().default('/opt/data/exports'),

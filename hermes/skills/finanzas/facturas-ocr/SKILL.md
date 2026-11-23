@@ -51,7 +51,7 @@ Usá siempre una de estas categorías normalizadas:
 
 ### E. Facturas / Boletas en PDF
 1. Leé el PDF inmediatamente con `read_file(path)`.
-2. **Solo si `read_file` devuelve vacío o `<50` caracteres**, invocá `extract_scanned_pdf_ocr(filePath=path)`.
+2. **Solo si `read_file` devuelve vacío o `<50` caracteres** y Paperless está habilitado, invocá `extract_scanned_pdf_ocr(filePath=path)`. Si Paperless está deshabilitado (`disabled`), pedí una captura/foto para leerla con visión.
 3. Si tiene vencimientos futuros o cuotas, pasá `isInstallment: true`, `totalInstallments`, `firstDueDate`, `filePath` a `register_expense`.
 
 ### F. Presupuestos por Categoría
@@ -71,3 +71,14 @@ Usá siempre una de estas categorías normalizadas:
 - **Pagar cuota**: `search_pending_installments` ➔ si falta banco origen preguntalo, si no invocá `pay_installment`.
 - **Editar cuota o gasto**: `update_installment` / `update_expense`.
 - **Borrar**: identificá el registro exacto con `search_expenses` / `search_pending_installments`, pedí confirmación breve si hay riesgo de error y ejecutá `delete_expense` o `delete_installment`.
+
+### I. Salidas y Eventos Compartidos (`outings`)
+- **Crear salida**: `create_outing(name="Asado sábado", participants=["Ana", "Juan", "Sofía"])`. Podés gestionarla entre varios miembros o con un único usuario anotando lo que pagó cada participante.
+- **Sumar participante**: `add_outing_participant(outingRef, name)`. (También `add_outing_expense` crea participantes faltantes automáticamente si `autoAddParticipants=true`).
+- **Cargar gasto en salida**:
+  - Entre todos por igual: `add_outing_expense(outingRef, paidBy="Juan", description="Carne", amount="45k")`.
+  - Solo un subconjunto: `add_outing_expense(outingRef, paidBy="Sofía", description="Vino", amount="18k", splitBetween=["Juan", "Sofía"])`.
+  - Reparto desigual: `customShares=[{"participant":"Ana","percentage":60},{"participant":"Juan","percentage":40}]` (o `amount` exacto).
+- **Ver división / quién le debe a quién**: `get_outing_balance(outingRef)` → presentá en formato móvil sin tablas: total gastado, pagado vs parte de cada uno, y transferencias sugeridas (`settlements`).
+- **Listar / borrar**: `list_outings(status?)`, `delete_outing_expense(expenseId)`, `delete_outing(outingRef)`.
+- **Cerrar salida**: `settle_outing(outingRef, recordPersonalExpenseFor?)` — si el usuario quiere registrar su propia cuota en sus gastos personales, pasá su nombre/slug en `recordPersonalExpenseFor`.

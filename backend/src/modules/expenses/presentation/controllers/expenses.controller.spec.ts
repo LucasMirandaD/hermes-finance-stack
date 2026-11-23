@@ -17,17 +17,9 @@ describe('ExpensesController', () => {
       registerExpense: vi.fn(),
       getExpenseById: vi.fn(),
       listExpenses: vi.fn(),
-      registerCreditCard: vi.fn(),
-      listCreditCards: vi.fn(),
-      getMonthlyInstallmentsSummary: vi.fn(),
-      createMember: vi.fn(),
-      listMembers: vi.fn(),
-      getSharedBalance: vi.fn(),
-      setCategoryBudget: vi.fn(),
-      getBudgetStatus: vi.fn(),
-      createRecurringExpense: vi.fn(),
-      getFixedExpensesStatus: vi.fn(),
-      payRecurringExpense: vi.fn(),
+      searchExpenses: vi.fn(),
+      updateExpense: vi.fn(),
+      deleteExpense: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -91,25 +83,5 @@ describe('ExpensesController', () => {
     );
 
     await expect(controller.createExpense(dto)).rejects.toThrow(NotFoundException);
-  });
-
-  it('should return shared balance summary', async () => {
-    mockService.getSharedBalance!.mockResolvedValue(
-      Result.ok({
-        periodLabel: 'Mes 2026-11',
-        totalShared: 40000,
-        expensesCount: 2,
-        members: [],
-        settlements: [],
-      }),
-    );
-
-    const res = await controller.getSharedBalance('2026-11');
-    expect(res.totalShared).toBe(40000);
-    expect(mockService.getSharedBalance).toHaveBeenCalledWith({
-      month: '2026-11',
-      startDate: undefined,
-      endDate: undefined,
-    });
   });
 });

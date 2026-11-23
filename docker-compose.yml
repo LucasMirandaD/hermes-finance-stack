@@ -39,7 +39,7 @@ services:
       DB_NAME: ${EXPENSES_DB_NAME:-expenses_db}
       DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
       DB_LOGGING: ${DB_LOGGING:-false}
-      PAPERLESS_BASE_URL: http://paperless:8000
+      PAPERLESS_BASE_URL: ${PAPERLESS_BASE_URL:-http://paperless:8000}
       PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN:-}
       CHARTS_DIR: /opt/data/charts
       EXPORTS_DIR: /opt/data/exports

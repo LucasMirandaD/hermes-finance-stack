@@ -14,7 +14,7 @@ Skill para la **primera configuración** del hogar desde Telegram o CLI. Activá
 
 ## Flujo Guiado (una pregunta por turno)
 
-1. **`health_check`** (en silencio) — verificá PostgreSQL y Paperless. Si hay error de conexión MCP, explicá revisar `docker compose ps` y `scripts/smoke-test.sh`.
+1. **`health_check`** (en silencio) — verificá PostgreSQL (`database.connected: true`). Si `optionalServices.paperless.status === "disabled"`, es totalmente normal en stacks sin `--profile paperless`. Si hay error de conexión MCP, explicá revisar `docker compose ps` y `scripts/smoke-test.sh`.
 2. **`list_members`** —
    - Si no hay miembros: preguntá nombres (y opcionalmente `@usuario` de Telegram) de las personas que van a usar el bot o compartir gastos → registralas con `create_member`.
    - Si ya hay miembros: saludá por nombre y continuá.

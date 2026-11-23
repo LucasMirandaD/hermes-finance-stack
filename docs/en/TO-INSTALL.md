@@ -53,6 +53,8 @@ Always take a `pg_dump` backup first and apply the idempotent migration before r
 docker exec expenses-postgres pg_dump -U expenses_user expenses_db > backup_before_migration.sql
 docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
   < backend/sql/001_multiuser_budgets_fixed_expenses.sql
+docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
+  < backend/sql/002_outings.sql
 ```
 
 ## 5. Verification
@@ -65,9 +67,9 @@ Run the smoke test script:
 
 Expected output:
 - `GET /api/health` returns `{"status":"ok",...}`
-- `POST /api/mcp` `tools/list` returns `35` tools
-- `tools/call` `health_check` reports `database.connected: true`
-- `docker exec hermes-agent hermes mcp test expenses` succeeds with 35 tools connected
+- `POST /api/mcp` `tools/list` returns `43` tools
+- `tools/call` `health_check` reports `database.connected: true` (`optionalServices.paperless.status` will be `"disabled"` when running without `--profile paperless`, which is expected)
+- `docker exec hermes-agent hermes mcp test expenses` succeeds with 43 tools connected
 
 ## 6. Post-Install Telegram Pairing
 

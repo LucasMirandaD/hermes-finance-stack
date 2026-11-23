@@ -16,9 +16,11 @@ export interface HealthCheckResponseDto {
       budgets: number;
     };
   };
-  paperless: {
-    configured: boolean;
-    reachable: boolean;
+  optionalServices: {
+    paperless: {
+      enabled: boolean;
+      status: 'disabled' | 'ok' | 'unreachable';
+    };
   };
 }
 

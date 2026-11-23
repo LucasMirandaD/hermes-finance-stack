@@ -12,7 +12,12 @@ import { ExpensesService } from './domain/services/expenses.service';
 import { IExpensesRepository } from './data/repositories/i-expenses.repository';
 import { ExpensesRepository } from './data/repositories/expenses.repository';
 import { ExpensesController } from './presentation/controllers/expenses.controller';
-import { ExpensesMcpController } from './presentation/mcp/expenses-mcp.controller';
+import { InstallmentsController } from './presentation/controllers/installments.controller';
+import { CreditCardsController } from './presentation/controllers/credit-cards.controller';
+import { MembersController } from './presentation/controllers/members.controller';
+import { BudgetsController } from './presentation/controllers/budgets.controller';
+import { RecurringExpensesController } from './presentation/controllers/recurring-expenses.controller';
+import { AnalyticsController } from './presentation/controllers/analytics.controller';
 import { PaperlessService } from './infrastructure/paperless.service';
 import { ChartService } from './infrastructure/chart.service';
 import { ExportService } from './infrastructure/export.service';
@@ -29,7 +34,15 @@ import { ExportService } from './infrastructure/export.service';
       RecurringExpenseEntity,
     ]),
   ],
-  controllers: [ExpensesController, ExpensesMcpController],
+  controllers: [
+    ExpensesController,
+    InstallmentsController,
+    CreditCardsController,
+    MembersController,
+    BudgetsController,
+    RecurringExpensesController,
+    AnalyticsController,
+  ],
   providers: [
     PaperlessService,
     ChartService,

@@ -36,10 +36,10 @@ echo "   Response: $HEALTH_JSON"
 
 echo ""
 echo "2) Checking MCP JSON-RPC tools/list & health_check..."
-MCP_INIT_RES="$(curl -sf -X POST "${API_URL}/api/mcp" \
+curl -sf -X POST "${API_URL}/api/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"1.0.0"}}}')"
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"1.0.0"}}}' >/dev/null
 echo "   Initialize OK"
 
 MCP_TOOLS_RES="$(curl -sf -X POST "${API_URL}/api/mcp" \
@@ -54,8 +54,8 @@ tools = data.get("result", {}).get("tools", [])
 print(len(tools))
 ' <<< "$MCP_TOOLS_RES")"
 echo "   MCP tools/list count: $TOOLS_COUNT"
-if [[ "$TOOLS_COUNT" -lt 35 ]]; then
-  echo "❌ Expected at least 35 MCP tools, got $TOOLS_COUNT"
+if [[ "$TOOLS_COUNT" -lt 43 ]]; then
+  echo "❌ Expected at least 43 MCP tools, got $TOOLS_COUNT"
   exit 1
 fi
 
@@ -63,8 +63,17 @@ MCP_HEALTH_RES="$(curl -sf -X POST "${API_URL}/api/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health_check","arguments":{}}}')"
-echo "   MCP health_check call OK: $(echo "$MCP_HEALTH_RES" | tr -d '\n' | head -c 240)"
-echo ""
+
+python3 -c '
+import json, sys
+outer = json.loads(sys.stdin.read())
+payload = json.loads(outer["result"]["content"][0]["text"])
+if not payload.get("database", {}).get("connected"):
+    print("❌ Database is not connected:", payload)
+    sys.exit(1)
+paperless = payload.get("optionalServices", {}).get("paperless", {})
+print("   MCP health_check OK | db connected:", payload["database"]["connected"], "| paperless:", paperless)
+' <<< "$MCP_HEALTH_RES"
 
 echo ""
 echo "3) Checking Hermes Agent -> MCP connection inside container ($HERMES_CONTAINER)..."

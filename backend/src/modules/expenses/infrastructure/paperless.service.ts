@@ -4,6 +4,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { IExpensesRepository } from '../data/repositories/i-expenses.repository';
 
+export interface OptionalServiceHealth {
+  enabled: boolean;
+  status: 'disabled' | 'ok' | 'unreachable';
+}
+
 const ALLOWED_MEDIA_ROOTS = ['/opt/data', '/hermes-data'];
 
 @Injectable()
@@ -16,10 +21,13 @@ export class PaperlessService {
     private readonly configService: ConfigService,
     private readonly expensesRepo: IExpensesRepository,
   ) {
-    this.baseUrl = (
-      this.configService.get<string>('PAPERLESS_BASE_URL') || 'http://paperless:8000'
-    ).replace(/\/+$/, '');
     this.apiToken = (this.configService.get<string>('PAPERLESS_API_TOKEN') || '').trim();
+    const rawUrl = (this.configService.get<string>('PAPERLESS_BASE_URL') || '').trim();
+    this.baseUrl = (rawUrl || 'http://paperless:8000').replace(/\/+$/, '');
+  }
+
+  isEnabled(): boolean {
+    return Boolean(this.apiToken);
   }
 
   private resolveSafeMediaPath(filePath: string): string {
@@ -33,18 +41,18 @@ export class PaperlessService {
     return resolved;
   }
 
-  async checkHealth(): Promise<{ configured: boolean; reachable: boolean }> {
-    if (!this.apiToken) {
-      return { configured: false, reachable: false };
+  async checkHealth(): Promise<OptionalServiceHealth> {
+    if (!this.isEnabled()) {
+      return { enabled: false, status: 'disabled' };
     }
     try {
       const res = await fetch(`${this.baseUrl}/api/`, {
         headers: { Authorization: `Token ${this.apiToken}` },
         signal: AbortSignal.timeout(3000),
       });
-      return { configured: true, reachable: res.ok };
+      return { enabled: true, status: res.ok ? 'ok' : 'unreachable' };
     } catch {
-      return { configured: true, reachable: false };
+      return { enabled: true, status: 'unreachable' };
     }
   }
 
@@ -88,6 +96,11 @@ export class PaperlessService {
     filePath: string,
     title?: string,
   ): Promise<{ documentId: number | null; ocrText: string }> {
+    if (!this.isEnabled()) {
+      throw new Error(
+        'Paperless-ngx OCR no está habilitado en este stack (PAPERLESS_API_TOKEN vacío). Enviá una captura/foto del comprobante para procesarlo con visión.',
+      );
+    }
     return this.uploadAndPoll(filePath, title, true);
   }
 

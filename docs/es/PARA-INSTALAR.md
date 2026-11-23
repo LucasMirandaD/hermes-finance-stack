@@ -53,6 +53,8 @@ Hacé siempre un backup `pg_dump` previo y corré la migración idempotente ante
 docker exec expenses-postgres pg_dump -U expenses_user expenses_db > backup_antes_migracion.sql
 docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
   < backend/sql/001_multiuser_budgets_fixed_expenses.sql
+docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
+  < backend/sql/002_outings.sql
 ```
 
 ## 5. Verificación
@@ -65,9 +67,9 @@ Ejecutá el smoke test:
 
 Salida esperada:
 - `GET /api/health` responde `{"status":"ok",...}`
-- `POST /api/mcp` `tools/list` devuelve `35` herramientas
-- `tools/call` `health_check` reporta `database.connected: true`
-- `docker exec hermes-agent hermes mcp test expenses` reporta 35 tools conectadas
+- `POST /api/mcp` `tools/list` devuelve `43` herramientas
+- `tools/call` `health_check` reporta `database.connected: true` (`optionalServices.paperless.status` será `"disabled"` si el stack corre sin `--profile paperless`, lo cual es normal)
+- `docker exec hermes-agent hermes mcp test expenses` reporta 43 tools conectadas
 
 ## 6. Pairing Inicial en Telegram
 

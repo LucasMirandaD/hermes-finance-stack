@@ -8,7 +8,7 @@
 
 </div>
 
-A **single Hermes Agent** instance acts as your household financial interface via Telegram (direct messages or shared group chats), backed by a strongly-typed **NestJS 12 + TypeORM + PostgreSQL** MCP server with **35 tools**, native **PNG chart generation**, **CSV/JSON export**, **multi-user shared balances**, **recurring fixed-expense tracking**, **category budgets**, **installment management**, **Metabase BI**, and optional **Paperless-ngx OCR & archival**.
+A **single Hermes Agent** instance acts as your household financial interface via Telegram (direct messages or shared group chats), backed by a strongly-typed **NestJS 12 + TypeORM + PostgreSQL** MCP server with **43 tools**, native **PNG chart generation**, **CSV/JSON export**, **multi-user shared balances**, **group outings / event expense splitting**, **recurring fixed-expense tracking**, **category budgets**, **installment management**, optional **Metabase BI**, and optional **Paperless-ngx OCR & archival**.
 
 - Hermes **never stores expenses in local memory** (`memory_enabled: false`) — PostgreSQL is the single source of truth.
 - Works for **solo users, couples, or roommates** inside **one Hermes bot** (DM or Telegram group) using automatic sender detection (`**User:**` / `[sender name]`).
@@ -24,7 +24,7 @@ A **single Hermes Agent** instance acts as your household financial interface vi
 - [What you can ask (chat examples)](#what-you-can-ask-chat-examples)
 - [Telegram UX & onboarding](#telegram-ux--onboarding)
 - [Optional profiles (Metabase & Paperless-ngx)](#optional-profiles-metabase--paperless-ngx)
-- [MCP tools reference (35 tools)](#mcp-tools-reference-35-tools)
+- [MCP tools reference (43 tools)](#mcp-tools-reference-43-tools)
 - [Repo structure](#repo-structure)
 - [Tests & migrations](#tests--migrations)
 - [Troubleshooting](#troubleshooting)
@@ -65,7 +65,7 @@ Then verify & pair Telegram:
 | Step | Command | Expected |
 |---|---|---|
 | 1. Check containers | `docker compose ps` | `expenses-postgres`, `expenses-api` (healthy), `hermes-agent` running |
-| 2. Run smoke test | `./scripts/smoke-test.sh` | `/api/health` OK, 35 MCP tools verified, `✓ Connected` |
+| 2. Run smoke test | `./scripts/smoke-test.sh` | `/api/health` OK, 43 MCP tools verified, `✓ Connected` |
 | 3. Pair Telegram | Send any message to your bot → `docker exec hermes-agent hermes pairing approve telegram <CODE>` | Bot replies in Telegram (skip if `TELEGRAM_ALLOWED_USERS` is set) |
 | 4. Guided setup | Message the bot: *"Empecemos"* | Runs the `onboarding` skill step-by-step |
 | 5. First expense | *"Gasté 45k en supermercado con débito Galicia"* | Structured `Listo ✅` confirmation |
@@ -85,10 +85,10 @@ Then verify & pair Telegram:
 |---|---|---|
 | **Hermes Gateway** | Telegram UI, vision, PDF `anydoc`, silent reactions (`👀`/`👍`), `MEDIA:` file delivery | `./hermes/` |
 | **SOUL + Skills** | Strict finance domain guardrails, mobile formatting, multi-user identification | `./hermes/SOUL.md`, `./hermes/skills/finanzas/` |
-| **NestJS 12 Backend** | Clean Architecture + TypeORM + Zod MCP server + REST API + Chart/Export engines | `./backend/` |
-| **PostgreSQL 17** | 7 relational tables (`expenses`, `expense_installments`, `credit_cards`, `members`, `expense_allocations`, `category_budgets`, `recurring_expenses`) | `postgres_data` volume |
-| **Metabase BI (optional)** | Executive dashboards with 14 pre-calibrated SQL queries | `--profile metabase` (`:3005`) |
-| **Paperless-ngx (optional)** | Async document archival & Tesseract OCR fallback for scanned PDFs | `--profile paperless` (`:8010`) |
+| **NestJS 12 Backend** | Modular Clean Architecture (`ExpensesModule`, `OutingsModule`, `McpModule`) + TypeORM + Chart/Export engines | `./backend/` |
+| **PostgreSQL 17** | 10 relational tables (`expenses`, `expense_installments`, `credit_cards`, `members`, `expense_allocations`, `category_budgets`, `recurring_expenses`, `outings`, `outing_participants`, `outing_expenses`) | `postgres_data` volume |
+| **Metabase BI (optional)** | Executive dashboards with 15 pre-calibrated SQL queries | `--profile metabase` (`:3005`) |
+| **Paperless-ngx (optional)** | Async document archival & Tesseract OCR fallback (`disabled` safely in `health_check` when not enabled) | `--profile paperless` (`:8010`) |
 
 ---
 
@@ -105,7 +105,16 @@ Unlike setups that spin up one Hermes container per person, **a single Hermes bo
   - Shared expenses (*"compartido"*, *"mitad y mitad"*, *"del depto"*, or explicit `70/30` split) use `scope: "SHARED"` and store exact member allocations summing to `100%`.
 - **Shared balance & settlements (`get_shared_balance`)**: computes each member's `totalPaid`, `totalAttributed`, `netBalance`, and minimal settlement transfers (*"who owes whom"*).
 
-### 2. Fixed / Recurring Expenses
+### 2. Group Outings / Event Expense Splitting ("Salidas")
+
+Track one-off events (*"Asado sábado"*, *"Bariloche trip"*, *"Friends dinner"*) cleanly separated from your personal cashflow:
+
+- **Multi-user or single-user entry**: works whether multiple people log their own spending in a group chat OR a single user dictates what everyone paid (*"Juan paid 45k for meat, Sofía paid 18k for drinks"*). Ad-hoc friends do **not** need Telegram accounts or household `members` records.
+- **Flexible splitting**: split equally across all participants (`EQUAL`), only a subset (`splitBetween`, e.g. *"wine only between Juan and Sofía"*), or exact/percentage `customShares`.
+- **Minimal settlements (`get_outing_balance`)**: computes each participant's paid vs. share and minimum transfers (*"X transfers $Y to Z"*).
+- **Optional personal recording (`settle_outing`)**: settles the event and optionally records only your share into your personal `expenses`.
+
+### 3. Fixed / Recurring Expenses
 
 Define monthly, bimonthly, or yearly templates in `recurring_expenses` (rent, internet, utilities, subscriptions):
 
@@ -113,18 +122,18 @@ Define monthly, bimonthly, or yearly templates in `recurring_expenses` (rent, in
 - Pay with inflation adjustment: *"Pagué internet 48 mil"* → `pay_recurring_expense` records the actual expense linked to the template with `isFixed: true`.
 - `get_financial_summary` breaks down **Fixed vs Variable** spending automatically.
 
-### 3. Installments & Card Extensions
+### 4. Installments & Card Extensions
 
 - Supports multi-installment plans (`totalInstallments`, `intervalMonths`, `firstDueDate`) and credit card extensions (`credit_cards` with `isExtension`, `holderName`, `closingDay`, `dueDay`).
 - `get_monthly_installments_summary` groups installments by `holderName` sorted descending by amount and flags finishing installments (`isLastInstallment: true` → `🏁`).
 - Updating a single installment (`update_installment`) automatically recalculates the parent expense total; updating an expense total (`update_expense`) redistributes remaining balance across `PENDING` installments.
 
-### 4. Category Budgets & Alerts
+### 5. Category Budgets & Alerts
 
 - Set monthly limits per category (`set_category_budget`) with customizable alert thresholds (default `80%`), optionally scoped to `ALL`, `PERSONAL`, `SHARED`, or a specific member.
 - `get_financial_summary` automatically surfaces triggered `budgetAlerts`.
 
-### 5. Multimodal OCR, Native PNG Charts & Exports
+### 6. Multimodal OCR, Native PNG Charts & Exports
 
 - **Screenshots without caption**: Hermes previews extracted fields (merchant, origin bank, amount, date, category) and asks confirmation before saving. With caption, it registers immediately.
 - **Digital PDFs**: read instantaneously via `read_file` (`anydoc`); falls back to `extract_scanned_pdf_ocr` (Paperless Tesseract) only if extracted text is `<50` characters.
@@ -145,6 +154,7 @@ Define monthly, bimonthly, or yearly templates in `recurring_expenses` (rent, in
 - *"Resumen de noviembre"* / *"¿Noviembre vs octubre?"*
 - *"Top 5 gastos del mes"*
 - *"Seteá presupuesto de 250 mil en supermercado"*
+- *"Creá la salida Asado sábado con Juan, Sofía y yo"* → *"Juan pagó 45k de carne, el vino de 18k solo entre Juan y Sofía"* → *"¿Cómo dividimos el asado?"*
 - *"Mandame un gráfico de gastos por categoría"* / *"Exportá noviembre en CSV"*
 - *(Send a bank transfer screenshot or PDF bill directly in Telegram)*
 
@@ -174,7 +184,7 @@ The `monthly-summary-format` skill enforces **table-free** mobile formatting (Ma
   ```bash
   docker compose --profile metabase up -d --build
   ```
-  Connect Metabase to PostgreSQL (`host: postgres`, `port: 5432`, `db: expenses_db`) and copy the 14 calibrated queries from [`docs/metabase-queries.sql`](docs/metabase-queries.sql).
+  Connect Metabase to PostgreSQL (`host: postgres`, `port: 5432`, `db: expenses_db`) and copy the 15 calibrated queries from [`docs/metabase-queries.sql`](docs/metabase-queries.sql).
 
 - **With Paperless-ngx** (`http://localhost:8010`):
   ```bash
@@ -189,7 +199,7 @@ The `monthly-summary-format` skill enforces **table-free** mobile formatting (Ma
 
 ---
 
-## MCP tools reference (35 tools)
+## MCP tools reference (43 tools)
 
 Served at `POST /api/mcp` via Streamable HTTP (`expenses` server):
 
@@ -199,11 +209,12 @@ Served at `POST /api/mcp` via Streamable HTTP (`expenses` server):
 | **Expenses** (6) | `register_expense`, `search_expenses`, `list_recent_expenses`, `update_expense`, `delete_expense`, `extract_scanned_pdf_ocr` |
 | **Installments & Cards** (8) | `get_upcoming_installments`, `get_monthly_installments_summary`, `search_pending_installments`, `pay_installment`, `update_installment`, `delete_installment`, `list_credit_cards`, `register_credit_card` |
 | **Members & Shared** (5) | `create_member`, `update_member`, `list_members`, `delete_member`, `get_shared_balance` |
+| **Outings / Events** (8) | `create_outing`, `list_outings`, `add_outing_participant`, `add_outing_expense`, `delete_outing_expense`, `get_outing_balance`, `settle_outing`, `delete_outing` |
 | **Budgets** (4) | `set_category_budget`, `list_category_budgets`, `delete_category_budget`, `get_budget_status` |
 | **Fixed / Recurring** (6) | `create_recurring_expense`, `list_recurring_expenses`, `update_recurring_expense`, `delete_recurring_expense`, `get_fixed_expenses_status`, `pay_recurring_expense` |
 | **Summary & Analytics** (5) | `get_financial_summary`, `compare_months`, `top_expenses`, `export_expenses`, `render_chart` |
 
-*(Total: 1 + 6 + 8 + 5 + 4 + 6 + 5 = **35 tools**.)*
+*(Total: 1 + 6 + 8 + 5 + 8 + 4 + 6 + 5 = **43 tools**.)*
 
 ---
 
@@ -216,9 +227,9 @@ hermes-finance-stack/
 ├── .env.example                           # Environment template without secrets
 ├── scripts/
 │   ├── setup.sh                           # Interactive Docker setup wizard
-│   └── smoke-test.sh                      # Health, 35-tool MCP JSON-RPC & container check
+│   └── smoke-test.sh                      # Health, 43-tool MCP JSON-RPC & container check
 ├── docs/
-│   ├── metabase-queries.sql               # 14 calibrated SQL queries for Metabase BI
+│   ├── metabase-queries.sql               # 15 calibrated SQL queries for Metabase BI
 │   ├── en/TO-INSTALL.md                   # AI-agent installation guide (EN)
 │   └── es/
 │       ├── README.md                      # Documentación completa en Español
@@ -234,8 +245,13 @@ hermes-finance-stack/
 │       └── onboarding/SKILL.md            # Guided first-time setup flow
 └── backend/                               # NestJS 12 + TypeORM + MCP server (TypeScript)
     ├── Dockerfile                         # Node 26 Alpine + font-dejavu for SVG->PNG
-    ├── sql/001_multiuser_budgets_fixed_expenses.sql
-    └── src/modules/expenses/              # Clean Architecture (data / domain / infrastructure / presentation)
+    ├── sql/
+    │   ├── 001_multiuser_budgets_fixed_expenses.sql
+    │   └── 002_outings.sql
+    └── src/modules/
+        ├── expenses/                      # Modular controllers (expenses, installments, cards, members, budgets, recurring, analytics)
+        ├── outings/                       # Shared outings / group expense splitting
+        └── mcp/                           # Modular Streamable HTTP MCP server (43 tools)
 ```
 
 ---
@@ -247,7 +263,7 @@ hermes-finance-stack/
 ```bash
 cd backend
 pnpm install
-pnpm test    # Vitest (29 tests across 6 files, including PNG chart & CSV/JSON export tests)
+pnpm test    # Vitest (38 tests across 9 files, including outings, PNG charts & CSV/JSON exports)
 pnpm build
 ```
 
@@ -256,6 +272,8 @@ pnpm build
 ```bash
 docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
   < backend/sql/001_multiuser_budgets_fixed_expenses.sql
+docker exec -i expenses-postgres psql -U expenses_user -d expenses_db \
+  < backend/sql/002_outings.sql
 ```
 
 ---

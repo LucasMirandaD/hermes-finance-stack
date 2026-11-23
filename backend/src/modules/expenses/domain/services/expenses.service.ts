@@ -124,7 +124,7 @@ export class ExpensesService implements IExpensesService {
         this.expensesRepo.checkDatabaseHealth(),
         this.paperlessService
           ? this.paperlessService.checkHealth()
-          : Promise.resolve({ configured: false, reachable: false }),
+          : Promise.resolve({ enabled: false, status: 'disabled' as const }),
       ]);
 
       return Result.ok({
@@ -132,7 +132,9 @@ export class ExpensesService implements IExpensesService {
         service: 'nest-expenses-mcp',
         timestamp: new Date().toISOString(),
         database: dbStats,
-        paperless,
+        optionalServices: {
+          paperless,
+        },
       });
     } catch (error: any) {
       this.logger.error(`Health check failed: ${error.message}`);

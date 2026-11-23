@@ -7,6 +7,9 @@ import { MemberEntity } from '../../modules/expenses/data/entities/member.entity
 import { ExpenseAllocationEntity } from '../../modules/expenses/data/entities/expense-allocation.entity';
 import { CategoryBudgetEntity } from '../../modules/expenses/data/entities/category-budget.entity';
 import { RecurringExpenseEntity } from '../../modules/expenses/data/entities/recurring-expense.entity';
+import { OutingEntity } from '../../modules/outings/data/entities/outing.entity';
+import { OutingParticipantEntity } from '../../modules/outings/data/entities/outing-participant.entity';
+import { OutingExpenseEntity } from '../../modules/outings/data/entities/outing-expense.entity';
 
 export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
   imports: [ConfigModule],
@@ -26,6 +29,9 @@ export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
       ExpenseAllocationEntity,
       CategoryBudgetEntity,
       RecurringExpenseEntity,
+      OutingEntity,
+      OutingParticipantEntity,
+      OutingExpenseEntity,
     ],
     synchronize: configService.get<boolean>('DB_SYNCHRONIZE', false),
     logging: configService.get<boolean>('DB_LOGGING', false),

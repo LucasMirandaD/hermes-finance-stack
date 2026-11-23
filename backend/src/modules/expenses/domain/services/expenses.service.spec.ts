@@ -62,7 +62,7 @@ describe('ExpensesService', () => {
     };
 
     mockPaperless = {
-      checkHealth: vi.fn().mockResolvedValue({ configured: false, reachable: false }),
+      checkHealth: vi.fn().mockResolvedValue({ enabled: false, status: 'disabled' }),
     };
 
     mockChart = {
@@ -86,6 +86,35 @@ describe('ExpensesService', () => {
     service = module.get<ExpensesService>(ExpensesService);
     vi.clearAllMocks();
     mockRepository.findBudgets!.mockResolvedValue([]);
+  });
+
+  describe('healthCheck', () => {
+    it('should report overall ok when database is up and optional paperless is disabled', async () => {
+      mockRepository.checkDatabaseHealth!.mockResolvedValueOnce({
+        connected: true,
+        counts: {
+          expenses: 10,
+          creditCards: 2,
+          members: 1,
+          recurringExpenses: 0,
+          budgets: 0,
+        },
+      });
+      mockPaperless.checkHealth!.mockResolvedValueOnce({
+        enabled: false,
+        status: 'disabled',
+      });
+
+      const res = await service.healthCheck();
+      expect(res.isSuccess).toBe(true);
+      const val = res.getValue();
+      expect(val.status).toBe('ok');
+      expect(val.database.connected).toBe(true);
+      expect(val.optionalServices.paperless).toEqual({
+        enabled: false,
+        status: 'disabled',
+      });
+    });
   });
 
   describe('registerExpense', () => {
